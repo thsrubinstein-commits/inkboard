@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<template id="__bundler_thumbnail">
+  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" fill="#15171b"/>
+    <g stroke="#3c4149" stroke-width="1.4" fill="none">
+      <rect x="30" y="33" width="26" height="34" rx="2.5"/>
+      <rect x="60" y="33" width="16" height="16" rx="2.5"/>
+      <rect x="60" y="53" width="16" height="14" rx="2.5"/>
+    </g>
+    <rect x="34" y="38" width="5" height="5" rx="1.2" fill="#e8a24c"/>
+    <line x1="42" y1="40.5" x2="52" y2="40.5" stroke="#8a9099" stroke-width="1.6"/>
+    <line x1="34" y1="48" x2="52" y2="48" stroke="#5e646d" stroke-width="1.6"/>
+    <line x1="34" y1="55" x2="52" y2="55" stroke="#5e646d" stroke-width="1.6"/>
+    <line x1="34" y1="62" x2="48" y2="62" stroke="#5e646d" stroke-width="1.6"/>
+    <path d="M30 70 l-8 0 M76 30 l6 0" stroke="#3c4149" stroke-width="1.4"/>
+  </svg>
+</template>
+<helmet>
+<link rel="stylesheet" href="colors_and_type.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg-0); }
+  body { font-family: var(--font-mono); font-feature-settings: 'tnum' 1, 'zero' 1; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; overflow: hidden; }
+  textarea, input, button { font-family: var(--font-mono); }
+  textarea::placeholder, input::placeholder { color: var(--fg-4); }
+  input[type=date] { color-scheme: dark; }
+  .ib-x { opacity: 0; transition: opacity 120ms; }
+  [data-card-root]:hover .ib-x { opacity: 1; }
+</style>
+</helmet>
+
+<div style="position:fixed; inset:0; background:var(--bg-0); color:var(--fg-1); overflow:hidden;">
+
+  <div ref="{{ stageRef }}" style="position:absolute; inset:0; cursor:grab; touch-action:none; overflow:hidden;">
+    <div style="position:absolute; left:0; top:0; transform-origin:0 0; will-change:transform; transform: {{ boardTransform }}; transition: {{ boardTransition }};">
+
+      <div style="position:absolute; left:-3600px; top:-2800px; width:7200px; height:5600px; background-image: radial-gradient(var(--line-soft) 1.1px, transparent 1.1px); background-size: 28px 28px; pointer-events:none;"></div>
+      <div style="position:absolute; left:-1px; top:-2800px; width:1px; height:5600px; background:var(--line-soft); pointer-events:none;"></div>
+      <div style="position:absolute; left:-3600px; top:-1px; width:7200px; height:1px; background:var(--line-soft); pointer-events:none;"></div>
+
+      <sc-for list="{{ cards }}" as="c" hint-placeholder-count="5">
+
+        <!-- ===== HOME ===== -->
+        <sc-if value="{{ c.isHome }}" hint-placeholder-val="{{ true }}">
+          <div data-card-root="1" data-card-id="{{ c.id }}" style="position:absolute; left:0; top:0; width:560px; transform: {{ c.transform }}; background:var(--bg-1); border:1px solid var(--line); border-radius:8px; box-shadow:var(--elev-rail); padding:22px 24px; display:flex; flex-direction:column; gap:15px; cursor:grab;">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+              <div style="display:flex; flex-direction:column; gap:7px;">
+                <div style="font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--fg-3);">Inkboard · {{ locLabel }}</div>
+                <div style="height:9px; width:150px; background:repeating-linear-gradient(90deg, var(--fg-4) 0 1px, transparent 1px 16px); opacity:0.85;"></div>
+              </div>
+              <div style="display:flex; flex-direction:column; align-items:flex-end; gap:2px;">
+                <div style="font-size:30px; font-weight:500; line-height:1; color:var(--accent);">{{ clockHHMM }}</div>
+                <div style="font-size:11px; color:var(--fg-3); letter-spacing:0.06em;">{{ clockSS }}</div>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <div style="font-size:34px; font-weight:600; line-height:1.1; letter-spacing:-0.01em; color:var(--fg-1);">{{ greeting }}, Tommy.</div>
+              <div data-nodrag="1" style="display:flex; align-items:center; gap:8px;">
+                <button data-nodrag="1" onClick="{{ prevDay }}" style="width:26px; height:26px; background:var(--well); border:1px solid var(--line); border-radius:4px; color:var(--fg-2); font-size:14px; cursor:pointer; display:grid; place-items:center;" style-hover="background:var(--well-hi); color:var(--fg-1);">‹</button>
+                <span style="font-size:13px; color:var(--fg-2); min-width:170px; text-align:center; letter-spacing:0.02em;">{{ selDateLabel }}</span>
+                <button data-nodrag="1" onClick="{{ nextDay }}" style="width:26px; height:26px; background:var(--well); border:1px solid var(--line); border-radius:4px; color:var(--fg-2); font-size:14px; cursor:pointer; display:grid; place-items:center;" style-hover="background:var(--well-hi); color:var(--fg-1);">›</button>
+                <sc-if value="{{ notToday }}" hint-placeholder-val="{{ true }}">
+                  <button data-nodrag="1" onClick="{{ goToday }}" style="height:26px; padding:0 10px; background:transparent; border:1px solid var(--accent-dim); border-radius:4px; color:var(--accent); font-size:11px; letter-spacing:0.06em; cursor:pointer;">today</button>
+                </sc-if>
+              </div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--fg-2);">Weather</span>
+              <span style="flex:1; height:0; border-top:1px solid var(--line);"></span>
+              <span style="font-size:11px; color:var(--fg-3);">{{ wxCondition }}</span>
+            </div>
+            <div style="display:flex; align-items:flex-end; gap:18px;">
+              <div style="font-size:38px; font-weight:500; line-height:0.9; color:var(--fg-1);">{{ wxTemp }}<span style="font-size:19px; color:var(--fg-3); vertical-align:top;">°F</span></div>
+              <div style="display:flex; flex-direction:column; gap:3px; padding-bottom:3px;">
+                <div style="font-size:12px; color:var(--fg-2);">{{ wxHiLo }}</div>
+                <div style="font-size:12px; color:var(--fg-3);">{{ wxWind }}</div>
+              </div>
+            </div>
+            <div style="display:flex; border:1px solid var(--line); border-radius:6px; overflow:hidden;">
+              <sc-for list="{{ hourly }}" as="h" hint-placeholder-count="6">
+                <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; padding:9px 0; border-right:1px solid var(--line);">
+                  <span style="font-size:10px; color:var(--fg-3);">{{ h.t }}</span>
+                  <span style="font-size:13px; color:var(--fg-3);">{{ h.g }}</span>
+                  <span style="font-size:13px; color:var(--fg-1); font-weight:500;">{{ h.temp }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:10px;">
+              <input data-nodrag="1" value="{{ c.title }}" onInput="{{ c.onTitle }}" style="background:transparent; border:0; color:var(--fg-2); font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; outline:none; padding:0; width:130px;" />
+              <span style="flex:1; height:0; border-top:1px solid var(--line);"></span>
+              <span style="font-size:11px; color:var(--fg-3);">{{ c.doneLabel }} done</span>
+            </div>
+            <div style="display:flex; flex-direction:column;">
+              <sc-for list="{{ c.items }}" as="it" hint-placeholder-count="4">
+                <div style="display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px solid var(--line-soft);">
+                  <button data-nodrag="1" onClick="{{ it.onToggle }}" style="flex:none; width:17px; height:17px; padding:0; border-radius:3px; border:1px solid var(--line-hard); background:var(--well); cursor:pointer; display:grid; place-items:center;">
+                    <sc-if value="{{ it.done }}" hint-placeholder-val="{{ true }}"><span style="display:block; width:17px; height:17px; border-radius:2px; background:var(--accent); color:var(--accent-ink); font-size:11px; line-height:17px; text-align:center;">✓</span></sc-if>
+                  </button>
+                  <sc-if value="{{ it.hasTime }}" hint-placeholder-val="{{ true }}"><span style="font-size:12px; color:var(--fg-3); width:46px;">{{ it.time }}</span></sc-if>
+                  <sc-if value="{{ it.done }}" hint-placeholder-val="{{ true }}"><input data-nodrag="1" value="{{ it.text }}" onInput="{{ it.onText }}" style="flex:1; min-width:0; background:transparent; border:0; outline:none; font-size:13px; color:var(--fg-4); text-decoration:line-through; padding:0;" /></sc-if>
+                  <sc-if value="{{ it.notDone }}" hint-placeholder-val="{{ true }}"><input data-nodrag="1" value="{{ it.text }}" onInput="{{ it.onText }}" placeholder="task…" style="flex:1; min-width:0; background:transparent; border:0; outline:none; font-size:13px; color:var(--fg-1); padding:0;" /></sc-if>
+                  <sc-if value="{{ it.editingDue }}" hint-placeholder-val="{{ false }}">
+                    <input data-nodrag="1" type="date" value="{{ it.dueValue }}" onChange="{{ it.onDue }}" onBlur="{{ it.onDueBlur }}" style="flex:none; background:var(--well); border:1px solid var(--accent-dim); border-radius:4px; color:var(--fg-1); font-size:11px; padding:2px 5px; outline:none;" />
+                  </sc-if>
+                  <sc-if value="{{ it.notEditingDue }}" hint-placeholder-val="{{ true }}">
+                    <button data-nodrag="1" onClick="{{ it.onEditDue }}" title="set deadline" style="flex:none; height:20px; padding:0 7px; border-radius:10px; cursor:pointer; border:1px solid {{ it.dueBorder }}; background:var(--well); color: {{ it.dueColor }}; font-size:10px; letter-spacing:0.04em; display:flex; align-items:center; gap:4px;" style-hover="background:var(--well-hi);">{{ it.dueChip }}</button>
+                  </sc-if>
+                  <sc-if value="{{ it.canCal }}" hint-placeholder-val="{{ false }}">
+                    <button data-nodrag="1" class="ib-x" onClick="{{ it.onCal }}" title="add to Apple Calendar" style="flex:none; height:20px; padding:0 7px; border-radius:10px; cursor:pointer; border:1px solid var(--line-hard); background:var(--well); color:var(--fg-2); font-size:10px; letter-spacing:0.04em;" style-hover="background:var(--well-hi); color:var(--fg-1);">＋ cal</button>
+                  </sc-if>
+                  <button data-nodrag="1" class="ib-x" onClick="{{ it.onDelete }}" style="flex:none; width:18px; height:18px; background:transparent; border:0; color:var(--fg-4); font-size:14px; cursor:pointer;" style-hover="color:var(--fg-1);">×</button>
+                </div>
+              </sc-for>
+              <button data-nodrag="1" onClick="{{ c.onAddItem }}" style="display:flex; align-items:center; gap:8px; padding:9px 0; border:0; border-top:1px solid var(--line-soft); background:transparent; color:var(--fg-3); font-size:12px; cursor:pointer; text-align:left;" style-hover="color:var(--fg-1);"><span style="font-size:14px;">+</span> add task</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== CHECKLIST ===== -->
+        <sc-if value="{{ c.isChecklist }}" hint-placeholder-val="{{ true }}">
+          <div data-card-root="1" data-card-id="{{ c.id }}" style="position:absolute; left:0; top:0; width:360px; transform: {{ c.transform }}; background:var(--bg-1); border:1px solid var(--line); border-radius:8px; box-shadow:var(--elev-rail); padding:18px; display:flex; flex-direction:column; gap:11px; cursor:grab;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="color:var(--fg-4); font-size:12px;">⠿</span>
+              <input data-nodrag="1" value="{{ c.title }}" onInput="{{ c.onTitle }}" style="flex:1; min-width:0; background:transparent; border:0; color:var(--fg-2); font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; outline:none; padding:0;" />
+              <span style="font-size:11px; color:var(--fg-3);">{{ c.doneLabel }}</span>
+              <button data-nodrag="1" class="ib-x" onClick="{{ c.onDeleteCard }}" style="width:18px; height:18px; background:transparent; border:0; color:var(--fg-4); font-size:14px; cursor:pointer;" style-hover="color:var(--fg-1);">×</button>
+            </div>
+            <div style="display:flex; flex-direction:column;">
+              <sc-for list="{{ c.items }}" as="it" hint-placeholder-count="4">
+                <div style="display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px solid var(--line-soft);">
+                  <button data-nodrag="1" onClick="{{ it.onToggle }}" style="flex:none; width:17px; height:17px; padding:0; border-radius:3px; border:1px solid var(--line-hard); background:var(--well); cursor:pointer; display:grid; place-items:center;">
+                    <sc-if value="{{ it.done }}" hint-placeholder-val="{{ true }}"><span style="display:block; width:17px; height:17px; border-radius:2px; background:var(--accent); color:var(--accent-ink); font-size:11px; line-height:17px; text-align:center;">✓</span></sc-if>
+                  </button>
+                  <sc-if value="{{ it.done }}" hint-placeholder-val="{{ true }}"><input data-nodrag="1" value="{{ it.text }}" onInput="{{ it.onText }}" style="flex:1; min-width:0; background:transparent; border:0; outline:none; font-size:13px; color:var(--fg-4); text-decoration:line-through; padding:0;" /></sc-if>
+                  <sc-if value="{{ it.notDone }}" hint-placeholder-val="{{ true }}"><input data-nodrag="1" value="{{ it.text }}" onInput="{{ it.onText }}" placeholder="item…" style="flex:1; min-width:0; background:transparent; border:0; outline:none; font-size:13px; color:var(--fg-1); padding:0;" /></sc-if>
+                  <sc-if value="{{ it.editingDue }}" hint-placeholder-val="{{ false }}">
+                    <input data-nodrag="1" type="date" value="{{ it.dueValue }}" onChange="{{ it.onDue }}" onBlur="{{ it.onDueBlur }}" style="flex:none; background:var(--well); border:1px solid var(--accent-dim); border-radius:4px; color:var(--fg-1); font-size:11px; padding:2px 5px; outline:none;" />
+                  </sc-if>
+                  <sc-if value="{{ it.notEditingDue }}" hint-placeholder-val="{{ true }}">
+                    <button data-nodrag="1" onClick="{{ it.onEditDue }}" title="set deadline" style="flex:none; height:20px; padding:0 7px; border-radius:10px; cursor:pointer; border:1px solid {{ it.dueBorder }}; background:var(--well); color: {{ it.dueColor }}; font-size:10px; letter-spacing:0.04em; display:flex; align-items:center; gap:4px;" style-hover="background:var(--well-hi);">{{ it.dueChip }}</button>
+                  </sc-if>
+                  <sc-if value="{{ it.canCal }}" hint-placeholder-val="{{ false }}">
+                    <button data-nodrag="1" class="ib-x" onClick="{{ it.onCal }}" title="add to Apple Calendar" style="flex:none; height:20px; padding:0 7px; border-radius:10px; cursor:pointer; border:1px solid var(--line-hard); background:var(--well); color:var(--fg-2); font-size:10px; letter-spacing:0.04em;" style-hover="background:var(--well-hi); color:var(--fg-1);">＋ cal</button>
+                  </sc-if>
+                  <button data-nodrag="1" class="ib-x" onClick="{{ it.onDelete }}" style="flex:none; width:18px; height:18px; background:transparent; border:0; color:var(--fg-4); font-size:14px; cursor:pointer;" style-hover="color:var(--fg-1);">×</button>
+                </div>
+              </sc-for>
+              <button data-nodrag="1" onClick="{{ c.onAddItem }}" style="display:flex; align-items:center; gap:8px; padding:9px 0; border:0; border-top:1px solid var(--line-soft); background:transparent; color:var(--fg-3); font-size:12px; cursor:pointer; text-align:left;" style-hover="color:var(--fg-1);"><span style="font-size:14px;">+</span> add item</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== LIST ===== -->
+        <sc-if value="{{ c.isList }}" hint-placeholder-val="{{ true }}">
+          <div data-card-root="1" data-card-id="{{ c.id }}" style="position:absolute; left:0; top:0; width:340px; transform: {{ c.transform }}; background:var(--bg-1); border:1px solid var(--line); border-radius:8px; box-shadow:var(--elev-rail); padding:18px; display:flex; flex-direction:column; gap:11px; cursor:grab;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="color:var(--fg-4); font-size:12px;">⠿</span>
+              <input data-nodrag="1" value="{{ c.title }}" onInput="{{ c.onTitle }}" style="flex:1; min-width:0; background:transparent; border:0; color:var(--fg-2); font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; outline:none; padding:0;" />
+              <button data-nodrag="1" class="ib-x" onClick="{{ c.onDeleteCard }}" style="width:18px; height:18px; background:transparent; border:0; color:var(--fg-4); font-size:14px; cursor:pointer;" style-hover="color:var(--fg-1);">×</button>
+            </div>
+            <div style="display:flex; flex-direction:column;">
+              <sc-for list="{{ c.items }}" as="it" hint-placeholder-count="4">
+                <div style="display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px solid var(--line-soft);">
+                  <span style="flex:none; color:var(--fg-4); font-size:13px; width:8px;">·</span>
+                  <input data-nodrag="1" value="{{ it.text }}" onInput="{{ it.onText }}" placeholder="line…" style="flex:1; min-width:0; background:transparent; border:0; outline:none; font-size:13px; color:var(--fg-1); padding:0;" />
+                  <button data-nodrag="1" class="ib-x" onClick="{{ it.onDelete }}" style="flex:none; width:18px; height:18px; background:transparent; border:0; color:var(--fg-4); font-size:14px; cursor:pointer;" style-hover="color:var(--fg-1);">×</button>
+                </div>
+              </sc-for>
+              <button data-nodrag="1" onClick="{{ c.onAddItem }}" style="display:flex; align-items:center; gap:8px; padding:9px 0; border:0; border-top:1px solid var(--line-soft); background:transparent; color:var(--fg-3); font-size:12px; cursor:pointer; text-align:left;" style-hover="color:var(--fg-1);"><span style="font-size:14px;">+</span> add line</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== NOTES ===== -->
+        <sc-if value="{{ c.isNotes }}" hint-placeholder-val="{{ true }}">
+          <div data-card-root="1" data-card-id="{{ c.id }}" style="position:absolute; left:0; top:0; width:340px; transform: {{ c.transform }}; background:var(--bg-1); border:1px solid var(--line); border-radius:8px; box-shadow:var(--elev-rail); padding:18px; display:flex; flex-direction:column; gap:11px; cursor:grab;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="color:var(--fg-4); font-size:12px;">⠿</span>
+              <input data-nodrag="1" value="{{ c.title }}" onInput="{{ c.onTitle }}" style="flex:1; min-width:0; background:transparent; border:0; color:var(--fg-2); font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; outline:none; padding:0;" />
+              <button data-nodrag="1" class="ib-x" onClick="{{ c.onDeleteCard }}" style="width:18px; height:18px; background:transparent; border:0; color:var(--fg-4); font-size:14px; cursor:pointer;" style-hover="color:var(--fg-1);">×</button>
+            </div>
+            <textarea data-nodrag="1" value="{{ c.text }}" onInput="{{ c.onNotes }}" placeholder="jot anything…" style="width:100%; min-height:150px; resize:vertical; background:var(--well); border:1px solid var(--line); border-radius:4px; color:var(--fg-1); font-size:13px; line-height:1.6; padding:11px 12px; outline:none;" style-focus="border-color:var(--accent);"></textarea>
+          </div>
+        </sc-if>
+
+      </sc-for>
+
+    </div>
+  </div>
+
+  <div style="position:absolute; top:16px; left:16px; display:flex; align-items:center; gap:9px; padding:0 13px; height:34px; background:var(--bg-2); border:1px solid var(--line); border-radius:6px; box-shadow:var(--elev-rail); pointer-events:none;">
+    <span style="color:var(--accent); font-size:13px; line-height:1;">◆</span>
+    <span style="font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--fg-2);">Inkboard</span>
+  </div>
+
+  <div style="position:absolute; bottom:14px; left:50%; transform:translateX(-50%); font-size:10px; color:var(--fg-4); letter-spacing:0.06em; pointer-events:none; user-select:none;">drag empty space to pan · drag a card to move it · scroll to zoom · everything saves</div>
+
+  <div style="position:absolute; top:16px; right:16px; display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+    <div style="display:flex; align-items:center; gap:6px; padding:5px; background:var(--bg-2); border:1px solid var(--line); border-radius:8px; box-shadow:var(--elev-rail);">
+      <button data-nodrag="1" onClick="{{ toggleAdd }}" style="height:28px; padding:0 12px; background:transparent; border:1px solid var(--line); border-radius:4px; color:var(--fg-1); font-size:11px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; display:flex; align-items:center; gap:6px;" style-hover="background:var(--well);"><span style="color:var(--accent);">+</span> Section</button>
+      <button data-nodrag="1" onClick="{{ recenter }}" style="height:28px; padding:0 11px; background:transparent; border:1px solid var(--line); border-radius:4px; color:var(--fg-2); font-size:11px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer;" style-hover="background:var(--well); color:var(--fg-1);">Home</button>
+      <button data-nodrag="1" onClick="{{ toggleLoc }}" title="weather location" style="height:28px; padding:0 11px; max-width:130px; background:transparent; border:1px solid var(--line); border-radius:4px; color:var(--fg-2); font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; cursor:pointer; display:flex; align-items:center; gap:6px; overflow:hidden;" style-hover="background:var(--well); color:var(--fg-1);"><span style="color:var(--accent); flex:none;">⌖</span><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ locShort }}</span></button>
+      <span style="width:1px; height:20px; background:var(--line); margin:0 2px;"></span>
+      <button data-nodrag="1" onClick="{{ zoomOut }}" style="width:28px; height:28px; background:transparent; border:1px solid var(--line); border-radius:4px; color:var(--fg-1); font-size:15px; cursor:pointer; display:grid; place-items:center;" style-hover="background:var(--well);">−</button>
+      <span style="width:42px; text-align:center; font-size:11px; color:var(--fg-2);">{{ zoomPct }}</span>
+      <button data-nodrag="1" onClick="{{ zoomIn }}" style="width:28px; height:28px; background:transparent; border:1px solid var(--line); border-radius:4px; color:var(--fg-1); font-size:15px; cursor:pointer; display:grid; place-items:center;" style-hover="background:var(--well);">+</button>
+    </div>
+    <sc-if value="{{ showAdd }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; flex-direction:column; gap:2px; padding:5px; width:180px; background:var(--bg-2); border:1px solid var(--line); border-radius:8px; box-shadow:var(--elev-rail);">
+        <button data-nodrag="1" onClick="{{ addChecklist }}" style="display:flex; align-items:center; gap:10px; height:32px; padding:0 10px; background:transparent; border:0; border-radius:4px; color:var(--fg-1); font-size:12px; cursor:pointer; text-align:left;" style-hover="background:var(--well);"><span style="color:var(--fg-3); width:14px; text-align:center;">☑</span> Checklist</button>
+        <button data-nodrag="1" onClick="{{ addList }}" style="display:flex; align-items:center; gap:10px; height:32px; padding:0 10px; background:transparent; border:0; border-radius:4px; color:var(--fg-1); font-size:12px; cursor:pointer; text-align:left;" style-hover="background:var(--well);"><span style="color:var(--fg-3); width:14px; text-align:center;">·</span> List</button>
+        <button data-nodrag="1" onClick="{{ addNotes }}" style="display:flex; align-items:center; gap:10px; height:32px; padding:0 10px; background:transparent; border:0; border-radius:4px; color:var(--fg-1); font-size:12px; cursor:pointer; text-align:left;" style-hover="background:var(--well);"><span style="color:var(--fg-3); width:14px; text-align:center;">≡</span> Notes</button>
+      </div>
+    </sc-if>
+    <sc-if value="{{ showLoc }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; flex-direction:column; gap:2px; padding:8px; width:240px; background:var(--bg-2); border:1px solid var(--line); border-radius:8px; box-shadow:var(--elev-rail);">
+        <div style="display:flex; align-items:center; gap:10px; padding:2px 4px 8px;">
+          <span style="font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--fg-2);">Weather location</span>
+          <span style="flex:1; height:0; border-top:1px solid var(--line);"></span>
+        </div>
+        <sc-for list="{{ locations }}" as="L" hint-placeholder-count="2">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <button data-nodrag="1" onClick="{{ L.onSelect }}" style="flex:1; min-width:0; display:flex; align-items:center; gap:9px; height:32px; padding:0 9px; background:transparent; border:0; border-radius:4px; color:var(--fg-1); font-size:12px; cursor:pointer; text-align:left;" style-hover="background:var(--well);">
+              <span style="flex:none; color: {{ L.dotColor }};">⌖</span>
+              <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ L.label }}</span>
+              <sc-if value="{{ L.active }}" hint-placeholder-val="{{ true }}"><span style="flex:none; color:var(--accent); font-size:11px;">✓</span></sc-if>
+            </button>
+            <sc-if value="{{ L.removable }}" hint-placeholder-val="{{ true }}">
+              <button data-nodrag="1" onClick="{{ L.onRemove }}" title="remove" style="flex:none; width:24px; height:32px; background:transparent; border:0; color:var(--fg-4); font-size:14px; cursor:pointer;" style-hover="color:var(--fg-1);">×</button>
+            </sc-if>
+          </div>
+        </sc-for>
+        <div style="height:0; border-top:1px solid var(--line); margin:6px 0;"></div>
+        <input data-nodrag="1" value="{{ locQuery }}" onInput="{{ onLocQuery }}" onKeyDown="{{ onLocKey }}" placeholder="add a city + enter…" style="height:32px; background:var(--well); border:1px solid var(--line-hard); border-radius:4px; color:var(--fg-1); font-size:12px; padding:0 10px; outline:none;" style-focus="border-color:var(--accent);" />
+        <sc-if value="{{ locStatus }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:10px; color:var(--fg-3); padding:5px 4px 1px; letter-spacing:0.03em;">{{ locStatusText }}</div>
+        </sc-if>
+      </div>
+    </sc-if>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:&quot;100%&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.stageRef = React.createRef();
+    const uid = () => 'i' + Math.random().toString(36).slice(2, 8);
+    this.uid = uid;
+
+    // Everything seeded here is DEMO content: it shows on the first day so the board
+    // isn't empty, then clears itself once a new day rolls around. Anything the user
+    // edits, checks, or adds loses the demo flag and stays for good.
+    const D = true;
+    const cards = [
+      { id: 'home', type: 'home', x: -280, y: -440, title: 'On for today', items: [
+        { id: uid(), time: '08:30', text: 'Standup', due: null, demo: D },
+        { id: uid(), time: '10:00', text: '1:1 with Dana', due: null, demo: D },
+        { id: uid(), time: '12:30', text: 'Lunch with Sarah', due: null, demo: D },
+        { id: uid(), time: '15:00', text: 'Dentist — Concord', due: null, demo: D },
+        { id: uid(), time: '18:30', text: 'Gym — legs', due: null, demo: D },
+      ] },
+      { id: uid(), type: 'checklist', x: 380, y: -440, title: 'Habits', items: [
+        { id: uid(), text: 'Gym', due: null, demo: D },
+        { id: uid(), text: 'Read 20m', due: null, demo: D },
+        { id: uid(), text: 'Meditate', due: null, demo: D },
+        { id: uid(), text: 'No phone before 9', due: null, demo: D },
+      ] },
+      { id: uid(), type: 'checklist', x: 380, y: 40, title: 'Deadlines', items: [
+        { id: uid(), text: 'Ship Inkfield v0.3 notes', due: this.relKey(2), demo: D },
+        { id: uid(), text: 'Renew car registration', due: this.relKey(4), demo: D },
+        { id: uid(), text: 'File expense report', due: this.relKey(0), demo: D },
+      ] },
+      { id: uid(), type: 'notes', x: -780, y: 40, title: 'Notes', demo: D, text: 'glyph export presets — try the 8-bin set\nask Dana about the Concord scan files\nwater the plants (thu)\nbirthday gift for Maya?' },
+      { id: uid(), type: 'list', x: -780, y: -440, title: 'Goals & projects', items: [
+        { id: uid(), text: 'Inkfield v0.3 — 13/18 issues', demo: D },
+        { id: uid(), text: 'Kitchen reno — tile next week', demo: D },
+        { id: uid(), text: 'Run 100mi this month — 61/100', demo: D },
+      ] },
+    ];
+
+    const vw = (typeof window !== 'undefined') ? window.innerWidth : 1440;
+    const vh = (typeof window !== 'undefined') ? window.innerHeight : 900;
+    const z0 = Math.max(0.55, Math.min(0.92, (vw - 64) / 560));
+    const cx = -280 + 280, cy = -440 + 300;
+    this.state = {
+      cards,
+      dayLogs: {},
+      completed: {},
+      firstDay: this.todayKey(),
+      selKey: this.todayKey(),
+      now: new Date(),
+      panX: vw / 2 - cx * z0,
+      panY: vh / 2 - cy * z0,
+      zoom: z0,
+      animating: false,
+      showAdd: false,
+      showLoc: false,
+      editingDue: null,
+      locations: [
+        { id: 'hop', name: 'Hopkinton', region: 'NH', lat: 43.1912, lon: -71.6776, fixed: true },
+        { id: 'syr', name: 'Syracuse', region: 'NY', lat: 43.0481, lon: -76.1474, fixed: true },
+      ],
+      locId: 'hop',
+      locQuery: '',
+      locStatusText: '',
+      // Seeded with placeholders; replaced by a live forecast on mount.
+      weather: {
+        temp: 41, condition: 'partly cloudy', hi: 54, lo: 33, windSpeed: 6, windDir: 'NW', feels: 37,
+        hourly: [
+          { t: '7a', g: '○', temp: '39°' }, { t: '8a', g: '◔', temp: '41°' }, { t: '9a', g: '◑', temp: '44°' },
+          { t: '10a', g: '◑', temp: '48°' }, { t: '11a', g: '◕', temp: '51°' }, { t: '12p', g: '●', temp: '53°' },
+        ],
+        live: false, updated: 0,
+      },
+    };
+  }
+
+  wxInfo(code) {
+    const map = {
+      0: ['clear', '○'], 1: ['mostly clear', '◔'], 2: ['partly cloudy', '◑'], 3: ['overcast', '●'],
+      45: ['fog', '≋'], 48: ['rime fog', '≋'],
+      51: ['light drizzle', '⋰'], 53: ['drizzle', '⋰'], 55: ['heavy drizzle', '⋰'],
+      56: ['freezing drizzle', '⋰'], 57: ['freezing drizzle', '⋰'],
+      61: ['light rain', '⋮'], 63: ['rain', '⋮'], 65: ['heavy rain', '⫶'],
+      66: ['freezing rain', '⋮'], 67: ['freezing rain', '⫶'],
+      71: ['light snow', '∗'], 73: ['snow', '∗'], 75: ['heavy snow', '❄'], 77: ['snow grains', '∗'],
+      80: ['rain showers', '⋮'], 81: ['rain showers', '⋮'], 82: ['heavy showers', '⫶'],
+      85: ['snow showers', '∗'], 86: ['snow showers', '❄'],
+      95: ['thunderstorm', '⚡'], 96: ['thunderstorm', '⚡'], 99: ['thunderstorm', '⚡'],
+    };
+    return map[code] || ['—', '·'];
+  }
+  compass(deg) {
+    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    return dirs[Math.round((deg % 360) / 45) % 8];
+  }
+
+  activeLoc() {
+    return this.state.locations.find(l => l.id === this.state.locId) || this.state.locations[0];
+  }
+
+  loadWeather() {
+    const loc = this.activeLoc();
+    if (!loc) return;
+    const cacheKey = 'inkboard:wx:' + loc.id;
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) { const w = JSON.parse(cached); if (w && typeof w === 'object') this.setState({ weather: w }); }
+    } catch (e) {}
+    clearInterval(this._wxTimer);
+    const fetchNow = async () => {
+      const cur_loc = this.activeLoc();
+      if (!cur_loc) return;
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${cur_loc.lat}&longitude=${cur_loc.lon}`
+          + '&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m'
+          + '&hourly=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min'
+          + '&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FNew_York&forecast_days=2';
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const d = await res.json();
+        const cur = d.current || {};
+        const [condition, glyph] = this.wxInfo(cur.weather_code);
+        // next 6 hours from the hourly series
+        const times = (d.hourly && d.hourly.time) || [];
+        const now = new Date();
+        let start = times.findIndex(t => new Date(t) >= now);
+        if (start < 0) start = 0;
+        const hourly = [];
+        for (let i = start; i < start + 6 && i < times.length; i++) {
+          const hd = new Date(times[i]);
+          let h = hd.getHours(); const ap = h < 12 ? 'a' : 'p'; let hr = h % 12; if (hr === 0) hr = 12;
+          const [, g] = this.wxInfo(d.hourly.weather_code[i]);
+          hourly.push({ t: hr + ap, g, temp: Math.round(d.hourly.temperature_2m[i]) + '°' });
+        }
+        const weather = {
+          temp: Math.round(cur.temperature_2m),
+          feels: Math.round(cur.apparent_temperature),
+          condition, glyph,
+          hi: Math.round(d.daily.temperature_2m_max[0]),
+          lo: Math.round(d.daily.temperature_2m_min[0]),
+          windSpeed: Math.round(cur.wind_speed_10m),
+          windDir: this.compass(cur.wind_direction_10m),
+          hourly: hourly.length ? hourly : this.state.weather.hourly,
+          live: true, updated: Date.now(),
+        };
+        // ignore if the user switched locations mid-fetch
+        if (this.activeLoc() && this.activeLoc().id !== cur_loc.id) return;
+        this.setState({ weather });
+        try { localStorage.setItem('inkboard:wx:' + cur_loc.id, JSON.stringify(weather)); } catch (e) {}
+      } catch (e) { /* offline — keep cached/seed values */ }
+    };
+    fetchNow();
+    this._wxTimer = setInterval(fetchNow, 30 * 60 * 1000);
+  }
+
+  selectLocation(id) {
+    if (id === this.state.locId) { this.setState({ showLoc: false }); return; }
+    this.setState({ locId: id, showLoc: false, locStatusText: '' }, () => { this.persist(); this.loadWeather(); });
+  }
+  removeLocation(id) {
+    this.setState(s => {
+      const locations = s.locations.filter(l => l.id !== id);
+      const locId = s.locId === id ? (locations[0] && locations[0].id) : s.locId;
+      return { locations, locId };
+    }, () => { this.persist(); this.loadWeather(); });
+  }
+  async searchLocation() {
+    const q = (this.state.locQuery || '').trim();
+    if (!q) return;
+    this.setState({ locStatusText: 'searching…' });
+    try {
+      const res = await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name=' + encodeURIComponent(q));
+      const d = await res.json();
+      const r = d.results && d.results[0];
+      if (!r) { this.setState({ locStatusText: 'no match for “' + q + '”' }); return; }
+      const region = r.admin1 || r.country_code || r.country || '';
+      const loc = { id: 'g' + this.uid(), name: r.name, region, lat: r.latitude, lon: r.longitude, fixed: false };
+      this.setState(s => ({ locations: [...s.locations, loc], locId: loc.id, locQuery: '', locStatusText: '', showLoc: false }),
+        () => { this.persist(); this.loadWeather(); });
+    } catch (e) { this.setState({ locStatusText: 'search failed — offline?' }); }
+  }
+
+  pad2(n) { return String(n).padStart(2, '0'); }
+  keyOf(d) { return `${d.getFullYear()}-${this.pad2(d.getMonth() + 1)}-${this.pad2(d.getDate())}`; }
+  todayKey() { return this.keyOf(new Date()); }
+  relKey(days) { const d = new Date(); d.setDate(d.getDate() + days); return this.keyOf(d); }
+  parseKey(k) { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); }
+
+  componentDidMount() {
+    try {
+      const raw = localStorage.getItem('inkboard:v2');
+      if (raw) {
+        const s = JSON.parse(raw);
+        this.setState(prev => ({
+          cards: Array.isArray(s.cards) ? s.cards : prev.cards,
+          dayLogs: (s.dayLogs && typeof s.dayLogs === 'object') ? s.dayLogs : prev.dayLogs,
+          completed: (s.completed && typeof s.completed === 'object') ? s.completed : prev.completed,
+          panX: typeof s.panX === 'number' ? s.panX : prev.panX,
+          panY: typeof s.panY === 'number' ? s.panY : prev.panY,
+          zoom: typeof s.zoom === 'number' ? s.zoom : prev.zoom,
+          locations: (Array.isArray(s.locations) && s.locations.length) ? s.locations : prev.locations,
+          locId: s.locId || prev.locId,
+          firstDay: s.firstDay || prev.firstDay,
+        }), () => { this.loadWeather(); this.purgeDemo(); });
+        this._restored = true;
+      }
+    } catch (e) {}
+
+    this._clock = setInterval(() => this.setState({ now: new Date() }), 1000);
+    if (!this._restored) this.loadWeather();
+
+    const stage = this.stageRef.current;
+    if (stage) {
+      this._drag = null; this._cardDrag = null;
+      this._onDown = (e) => {
+        if (e.target.closest && e.target.closest('input, textarea, button, [data-nodrag]')) return;
+        if (this.state.showAdd) this.setState({ showAdd: false });
+        const p = e.touches ? e.touches[0] : e;
+        const cardEl = e.target.closest && e.target.closest('[data-card-root]');
+        if (cardEl) {
+          const id = cardEl.getAttribute('data-card-id');
+          const card = this.state.cards.find(c => c.id === id);
+          if (card) {
+            this._cardDrag = { id, x: p.clientX, y: p.clientY, ox: card.x, oy: card.y, moved: false };
+            this.bringToFront(id);
+            stage.style.cursor = 'grabbing';
+            return;
+          }
+        }
+        this._drag = { x: p.clientX, y: p.clientY, px: this.state.panX, py: this.state.panY };
+        if (this.state.animating) this.setState({ animating: false });
+        stage.style.cursor = 'grabbing';
+      };
+      this._onMove = (e) => {
+        const p = e.touches ? e.touches[0] : e;
+        if (this._cardDrag) {
+          const dx = (p.clientX - this._cardDrag.x) / this.state.zoom;
+          const dy = (p.clientY - this._cardDrag.y) / this.state.zoom;
+          if (Math.abs(dx) + Math.abs(dy) > 2) this._cardDrag.moved = true;
+          const id = this._cardDrag.id, ox = this._cardDrag.ox, oy = this._cardDrag.oy;
+          this.setState(s => ({ cards: s.cards.map(c => c.id === id ? { ...c, x: ox + dx, y: oy + dy } : c) }));
+        } else if (this._drag) {
+          this.setState({ panX: this._drag.px + (p.clientX - this._drag.x), panY: this._drag.py + (p.clientY - this._drag.y) });
+        }
+      };
+      this._onUp = () => {
+        if (this._drag || this._cardDrag) { this._drag = null; this._cardDrag = null; stage.style.cursor = 'grab'; this.persist(); }
+      };
+      this._onWheel = (e) => {
+        e.preventDefault();
+        const rect = stage.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const old = this.state.zoom;
+        const nz = Math.max(0.35, Math.min(1.8, old * (e.deltaY < 0 ? 1.12 : 0.89)));
+        const wx = (mx - this.state.panX) / old, wy = (my - this.state.panY) / old;
+        this.setState({ zoom: nz, panX: mx - wx * nz, panY: my - wy * nz, animating: false });
+        clearTimeout(this._wheelT);
+        this._wheelT = setTimeout(() => this.persist(), 250);
+      };
+      stage.addEventListener('mousedown', this._onDown);
+      stage.addEventListener('touchstart', this._onDown, { passive: true });
+      window.addEventListener('mousemove', this._onMove);
+      window.addEventListener('touchmove', this._onMove, { passive: true });
+      window.addEventListener('mouseup', this._onUp);
+      window.addEventListener('touchend', this._onUp);
+      stage.addEventListener('wheel', this._onWheel, { passive: false });
+    }
+  }
+
+  componentWillUnmount() {
+    clearInterval(this._clock);
+    clearInterval(this._wxTimer);
+    const stage = this.stageRef.current;
+    if (stage) {
+      stage.removeEventListener('mousedown', this._onDown);
+      stage.removeEventListener('touchstart', this._onDown);
+      stage.removeEventListener('wheel', this._onWheel);
+    }
+    window.removeEventListener('mousemove', this._onMove);
+    window.removeEventListener('touchmove', this._onMove);
+    window.removeEventListener('mouseup', this._onUp);
+    window.removeEventListener('touchend', this._onUp);
+  }
+
+  persist() {
+    try {
+      const { cards, dayLogs, completed, panX, panY, zoom, locations, locId, firstDay } = this.state;
+      localStorage.setItem('inkboard:v2', JSON.stringify({ cards, dayLogs, completed, panX, panY, zoom, locations, locId, firstDay }));
+    } catch (e) {}
+  }
+
+  bringToFront(id) {
+    this.setState(s => {
+      const idx = s.cards.findIndex(c => c.id === id);
+      if (idx < 0) return null;
+      const next = s.cards.slice();
+      const [card] = next.splice(idx, 1);
+      next.push(card);
+      return { cards: next };
+    });
+  }
+
+  // Once it's a calendar day past the very first run, drop every untouched demo
+  // item (and blank the demo notes) so the board shows only the user's real stuff.
+  purgeDemo() {
+    if (this.todayKey() === this.state.firstDay) return;
+    this.setState(s => {
+      let changed = false;
+      const cards = s.cards.map(c => {
+        let nc = c;
+        if (Array.isArray(c.items) && c.items.some(it => it.demo)) {
+          nc = { ...nc, items: c.items.filter(it => !it.demo) };
+          changed = true;
+        }
+        if (c.type === 'notes' && c.demo) {
+          nc = { ...nc, text: '', demo: false };
+          changed = true;
+        }
+        return nc;
+      });
+      return changed ? { cards } : null;
+    }, () => this.persist());
+  }
+
+  // ---- per-day done state (daily items) ----
+  toggleDayItem(itemId) {
+    this.promote(itemId);
+    const k = this.state.selKey;
+    this.setState(s => {
+      const day = { ...(s.dayLogs[k] || {}) };
+      day[itemId] = !day[itemId];
+      return { dayLogs: { ...s.dayLogs, [k]: day } };
+    }, () => this.persist());
+  }
+  // ---- global done state (deadline items) ----
+  toggleCompleted(itemId) {
+    this.promote(itemId);
+    this.setState(s => ({ completed: { ...s.completed, [itemId]: !s.completed[itemId] } }), () => this.persist());
+  }
+
+  // Build a real .ics event and hand it to the OS. On iPhone, tapping the
+  // downloaded file opens Apple Calendar's "Add Event" sheet.
+  addToCalendar(item, dateKey, time) {
+    const dk = (dateKey || this.todayKey()).replace(/-/g, '');
+    const pad = this.pad2.bind(this);
+    const dtstamp = (() => { const d = new Date(); return d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) + 'T' + pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + pad(d.getUTCSeconds()) + 'Z'; })();
+    const esc = s => String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+    let body;
+    const summary = esc(item.text || 'Untitled');
+    if (time && /^\d{1,2}:\d{2}/.test(time)) {
+      const [h, m] = time.split(':').map(Number);
+      const start = `${dk}T${pad(h)}${pad(m)}00`;
+      const endH = (h + 1) % 24;
+      const end = `${dk}T${pad(endH)}${pad(m)}00`;
+      body = `DTSTART:${start}\r\nDTEND:${end}`;
+    } else {
+      // all-day on the due date
+      const next = (() => { const d = this.parseKey(dateKey); d.setDate(d.getDate() + 1); return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()); })();
+      body = `DTSTART;VALUE=DATE:${dk}\r\nDTEND;VALUE=DATE:${next}`;
+    }
+    const ics = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Inkboard//EN', 'CALSCALE:GREGORIAN',
+      'BEGIN:VEVENT',
+      `UID:${item.id || this.uid()}-${dk}@inkboard`,
+      `DTSTAMP:${dtstamp}`,
+      body,
+      `SUMMARY:${summary}`,
+      'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${summary}`, 'TRIGGER:-PT15M', 'END:VALARM',
+      'END:VEVENT', 'END:VCALENDAR',
+    ].join('\r\n');
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const slug = (item.text || 'event').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'event';
+    a.href = url; a.download = slug + '.ics';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  }
+
+  // touching a demo item makes it real, so it survives the next-day purge
+  promote(itemId) {
+    this.setState(s => ({ cards: s.cards.map(c => !Array.isArray(c.items) ? c : { ...c, items: c.items.map(it => (it.id === itemId && it.demo) ? { ...it, demo: false } : it) }) }));
+  }
+
+  patchItem(cardId, itemId, patch) {
+    this.setState(s => ({ cards: s.cards.map(c => c.id !== cardId ? c : { ...c, items: c.items.map(it => it.id === itemId ? { ...it, demo: false, ...patch } : it) }) }), () => this.persist());
+  }
+  deleteItem(cardId, itemId) {
+    this.setState(s => ({ cards: s.cards.map(c => c.id !== cardId ? c : { ...c, items: c.items.filter(it => it.id !== itemId) }) }), () => this.persist());
+  }
+  addItem(cardId) {
+    this.setState(s => ({ cards: s.cards.map(c => c.id !== cardId ? c : { ...c, items: [...c.items, { id: this.uid(), text: '', due: null }] }) }), () => this.persist());
+  }
+  setTitle(cardId, v) {
+    this.setState(s => ({ cards: s.cards.map(c => c.id === cardId ? { ...c, title: v } : c) }), () => this.persist());
+  }
+  setNotes(cardId, v) {
+    this.setState(s => ({ cards: s.cards.map(c => c.id === cardId ? { ...c, text: v, demo: false } : c) }), () => { clearTimeout(this._nt); this._nt = setTimeout(() => this.persist(), 350); });
+  }
+  setDue(cardId, itemId, val) {
+    const due = val ? val : null;
+    this.setState(s => ({
+      cards: s.cards.map(c => c.id !== cardId ? c : { ...c, items: c.items.map(it => it.id === itemId ? { ...it, due } : it) }),
+      editingDue: null,
+    }), () => this.persist());
+  }
+  deleteCard(cardId) {
+    this.setState(s => ({ cards: s.cards.filter(c => c.id !== cardId) }), () => this.persist());
+  }
+  addCard(type) {
+    const stage = this.stageRef.current;
+    const vw = stage ? stage.clientWidth : window.innerWidth;
+    const vh = stage ? stage.clientHeight : window.innerHeight;
+    const cx = (vw / 2 - this.state.panX) / this.state.zoom - 170;
+    const cy = (vh / 2 - this.state.panY) / this.state.zoom - 120;
+    const base = { id: this.uid(), x: Math.round(cx), y: Math.round(cy) };
+    let card;
+    if (type === 'notes') card = { ...base, type: 'notes', title: 'Notes', text: '' };
+    else if (type === 'list') card = { ...base, type: 'list', title: 'New list', items: [{ id: this.uid(), text: '' }] };
+    else card = { ...base, type: 'checklist', title: 'New checklist', items: [{ id: this.uid(), text: '', due: null }] };
+    this.setState(s => ({ cards: [...s.cards, card], showAdd: false }), () => this.persist());
+  }
+
+  shiftDay(n) {
+    const d = this.parseKey(this.state.selKey); d.setDate(d.getDate() + n);
+    this.setState({ selKey: this.keyOf(d) });
+  }
+
+  centerHome() {
+    const home = this.state.cards.find(c => c.type === 'home') || this.state.cards[0];
+    if (!home) return;
+    const stage = this.stageRef.current;
+    const vw = stage ? stage.clientWidth : window.innerWidth;
+    const vh = stage ? stage.clientHeight : window.innerHeight;
+    const zoom = Math.max(0.55, Math.min(0.92, (vw - 64) / 560));
+    const cx = home.x + 280, cy = home.y + 300;
+    this.setState({ animating: true, zoom, panX: vw / 2 - cx * zoom, panY: vh / 2 - cy * zoom });
+    clearTimeout(this._animT);
+    this._animT = setTimeout(() => { this.setState({ animating: false }); this.persist(); }, 440);
+  }
+  zoomBy(f) {
+    const nz = Math.max(0.35, Math.min(1.8, this.state.zoom * f));
+    this.setState({ zoom: nz, animating: true });
+    clearTimeout(this._animT);
+    this._animT = setTimeout(() => { this.setState({ animating: false }); this.persist(); }, 280);
+  }
+
+  // due chip display
+  dueMeta(item) {
+    if (!item.due) return { chip: '⚑', color: 'var(--fg-4)', border: 'var(--line)', hasDue: false };
+    const due = this.parseKey(item.due);
+    const today = this.parseKey(this.todayKey());
+    const diff = Math.round((due - today) / 86400000);
+    let label;
+    if (diff === 0) label = 'today';
+    else if (diff === 1) label = 'tmrw';
+    else if (diff > 1 && diff < 7) label = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][due.getDay()];
+    else { const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']; label = `${M[due.getMonth()]} ${due.getDate()}`; }
+    const urgent = diff <= 1;
+    return { chip: 'due ' + label, color: urgent ? 'var(--accent)' : 'var(--fg-2)', border: urgent ? 'var(--accent-dim)' : 'var(--line-hard)', hasDue: true };
+  }
+
+  renderVals() {
+    const now = this.state.now;
+    const hh = now.getHours();
+    const pad = this.pad2.bind(this);
+    const greeting = hh < 12 ? 'Good morning' : hh < 18 ? 'Good afternoon' : 'Good evening';
+    const selKey = this.state.selKey;
+    const todayKey = this.todayKey();
+    const sel = this.parseKey(selKey);
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const selDateLabel = `${days[sel.getDay()]}, ${months[sel.getMonth()]} ${sel.getDate()}`;
+    const dayLog = this.state.dayLogs[selKey] || {};
+
+    const isDone = (it) => it.due ? !!this.state.completed[it.id] : !!dayLog[it.id];
+    // visible on the selected day: daily items always; deadline items until their due passes
+    const visibleOnSel = (it) => {
+      if (!it.due) return true;
+      return selKey <= it.due; // shows through the due date, gone the day after
+    };
+
+    const cards = this.state.cards.map(card => {
+      const base = {
+        id: card.id, title: card.title, type: card.type,
+        isHome: card.type === 'home', isChecklist: card.type === 'checklist',
+        isList: card.type === 'list', isNotes: card.type === 'notes',
+        transform: `translate(${Math.round(card.x)}px, ${Math.round(card.y)}px)`,
+        onTitle: (e) => this.setTitle(card.id, e.target.value),
+        onAddItem: () => this.addItem(card.id),
+        onDeleteCard: () => this.deleteCard(card.id),
+      };
+      if (card.type === 'notes') {
+        return { ...base, text: card.text, onNotes: (e) => this.setNotes(card.id, e.target.value) };
+      }
+      if (card.type === 'list') {
+        const items = (card.items || []).map(it => ({
+          id: it.id, text: it.text,
+          onText: (e) => this.patchItem(card.id, it.id, { text: e.target.value }),
+          onDelete: () => this.deleteItem(card.id, it.id),
+        }));
+        return { ...base, items };
+      }
+      // home + checklist: checkable, deadline-aware
+      const src = (card.items || []).filter(visibleOnSel);
+      const items = src.map(it => {
+        const done = isDone(it);
+        const dm = this.dueMeta(it);
+        const editing = this.state.editingDue === it.id;
+        return {
+          id: it.id, text: it.text,
+          time: it.time || '', hasTime: !!it.time,
+          done, notDone: !done,
+          dueChip: dm.chip, dueColor: dm.color, dueBorder: dm.border,
+          dueValue: it.due || '',
+          editingDue: editing, notEditingDue: !editing,
+          onToggle: () => it.due ? this.toggleCompleted(it.id) : this.toggleDayItem(it.id),
+          onText: (e) => this.patchItem(card.id, it.id, { text: e.target.value }),
+          onDelete: () => this.deleteItem(card.id, it.id),
+          onEditDue: () => this.setState({ editingDue: it.id }),
+          onDue: (e) => this.setDue(card.id, it.id, e.target.value),
+          onDueBlur: () => this.setState(s => s.editingDue === it.id ? { editingDue: null } : null),
+          // calendar export: timed items use the selected day + time; deadline items their due date
+          canCal: !!(it.time || it.due) && !!(it.text && it.text.trim()),
+          onCal: () => this.addToCalendar(it, it.time ? selKey : (it.due || selKey), it.time),
+        };
+      });
+      const total = items.length;
+      const done = items.filter(i => i.done).length;
+      return { ...base, items, doneLabel: `${done}/${total}` };
+    });
+
+    const w = this.state.weather;
+    const nb = '\u00a0';
+    const active = this.activeLoc() || {};
+    const locLabel = active.region ? `${active.name}, ${active.region}` : (active.name || '—');
+    const locations = this.state.locations.map(l => ({
+      id: l.id,
+      label: l.region ? `${l.name}, ${l.region}` : l.name,
+      active: l.id === this.state.locId,
+      dotColor: l.id === this.state.locId ? 'var(--accent)' : 'var(--fg-4)',
+      removable: !l.fixed,
+      onSelect: () => this.selectLocation(l.id),
+      onRemove: () => this.removeLocation(l.id),
+    }));
+
+    return {
+      locLabel,
+      locShort: active.name || '—',
+      locations,
+      showLoc: this.state.showLoc,
+      toggleLoc: () => this.setState(s => ({ showLoc: !s.showLoc, showAdd: false })),
+      locQuery: this.state.locQuery,
+      onLocQuery: (e) => this.setState({ locQuery: e.target.value }),
+      onLocKey: (e) => { if (e.key === 'Enter') this.searchLocation(); },
+      locStatus: !!this.state.locStatusText,
+      locStatusText: this.state.locStatusText,
+      stageRef: this.stageRef,
+      cards,
+      boardTransform: `translate(${Math.round(this.state.panX)}px, ${Math.round(this.state.panY)}px) scale(${this.state.zoom})`,
+      boardTransition: this.state.animating ? 'transform 420ms cubic-bezier(0.2,0,0,1)' : 'none',
+      greeting, selDateLabel,
+      hourly: w.hourly,
+      wxTemp: w.temp,
+      wxCondition: w.condition,
+      wxHiLo: `H ${w.hi}°${nb}${nb}L ${w.lo}°`,
+      wxWind: `wind ${w.windSpeed}mph ${w.windDir} · feels ${w.feels}°`,
+      notToday: selKey !== todayKey,
+      clockHHMM: `${pad(((hh + 11) % 12) + 1)}:${pad(now.getMinutes())}`,
+      clockSS: `${hh < 12 ? 'AM' : 'PM'} · :${pad(now.getSeconds())}`,
+      prevDay: () => this.shiftDay(-1),
+      nextDay: () => this.shiftDay(1),
+      goToday: () => this.setState({ selKey: this.todayKey() }),
+      zoomPct: `${Math.round(this.state.zoom * 100)}%`,
+      zoomIn: () => this.zoomBy(1.12),
+      zoomOut: () => this.zoomBy(0.89),
+      recenter: () => this.centerHome(),
+      showAdd: this.state.showAdd,
+      toggleAdd: () => this.setState(s => ({ showAdd: !s.showAdd, showLoc: false })),
+      addChecklist: () => this.addCard('checklist'),
+      addList: () => this.addCard('list'),
+      addNotes: () => this.addCard('notes'),
+    };
+  }
+}
+</script>
+</body>
+</html>

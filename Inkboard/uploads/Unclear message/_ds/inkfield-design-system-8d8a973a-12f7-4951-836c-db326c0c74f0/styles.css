@@ -1,0 +1,9 @@
+/* ============================================================================
+   InkField — styles.css  (design-system entry point)
+
+   Consumers link THIS one file. It re-exports the canonical token + utility
+   layer (colors_and_type.css). The files under handoff/ are standalone drop-in
+   replacements for the production repo and are intentionally NOT imported here.
+   ============================================================================ */
+
+@import url('./colors_and_type.css');

@@ -1,0 +1,226 @@
+{
+  "plugins": [
+    "react",
+    "import"
+  ],
+  "rules": {
+    "react/forbid-elements": [
+      "warn",
+      {
+        "forbid": []
+      }
+    ],
+    "no-restricted-imports": [
+      "warn",
+      {
+        "patterns": [
+          {
+            "group": [
+              "handoff/src/**",
+              "handoff/src/app/**",
+              "inkfield/**",
+              "ui_kits/inkfield/**",
+              "ui_kits/inkfield/components/**"
+            ],
+            "message": "Import design-system components from 'index.js', not component internals."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+        "message": "Raw hex color — use a design-system color token via var()."
+      },
+      {
+        "selector": "Literal[value=/\\b\\d+px\\b/]",
+        "message": "Raw px value — use a design-system spacing token via var()."
+      },
+      {
+        "selector": "Literal[value=/font-family\\s*:\\s*(?!['\\\"]?(?:IBM Plex Mono))/i]",
+        "message": "Font not provided by the design system. Available: IBM Plex Mono."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/index.js"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ],
+  "x-omelette": {
+    "components": {},
+    "tokens": [
+      "--accent",
+      "--accent-dim",
+      "--accent-glow",
+      "--accent-ink",
+      "--bg-0",
+      "--bg-1",
+      "--bg-2",
+      "--blobs",
+      "--dir-4",
+      "--dir-8",
+      "--dur-base",
+      "--dur-fast",
+      "--dur-slow",
+      "--ease",
+      "--ease-out",
+      "--elev-flat",
+      "--elev-rail",
+      "--fg-1",
+      "--fg-2",
+      "--fg-3",
+      "--fg-4",
+      "--font-mono",
+      "--font-ui",
+      "--glyph-bullet",
+      "--glyph-ornament",
+      "--glyph-rule",
+      "--hit",
+      "--hit-mini",
+      "--hit-toggle",
+      "--label-col",
+      "--lh-body",
+      "--lh-snug",
+      "--lh-tight",
+      "--line",
+      "--line-hard",
+      "--line-soft",
+      "--ls-glyph",
+      "--ls-label",
+      "--ls-num",
+      "--ls-rule",
+      "--ls-tight",
+      "--ok",
+      "--overlay-normal",
+      "--overlay-tangent",
+      "--r-lg",
+      "--r-md",
+      "--r-pill",
+      "--r-sm",
+      "--r-xs",
+      "--ramp",
+      "--rule-cap",
+      "--rule-glyph",
+      "--sp-1",
+      "--sp-10",
+      "--sp-12",
+      "--sp-16",
+      "--sp-2",
+      "--sp-20",
+      "--sp-3",
+      "--sp-4",
+      "--sp-5",
+      "--sp-6",
+      "--sp-8",
+      "--t-base",
+      "--t-body",
+      "--t-display",
+      "--t-h1",
+      "--t-h2",
+      "--t-label",
+      "--t-lg",
+      "--t-meta",
+      "--t-micro",
+      "--w-bold",
+      "--w-light",
+      "--w-medium",
+      "--w-regular",
+      "--w-semibold",
+      "--warn",
+      "--well",
+      "--well-hi"
+    ],
+    "tokenKinds": {
+      "--bg-0": "color",
+      "--bg-1": "color",
+      "--bg-2": "color",
+      "--well": "color",
+      "--well-hi": "color",
+      "--line": "color",
+      "--line-soft": "color",
+      "--line-hard": "color",
+      "--fg-1": "color",
+      "--fg-2": "color",
+      "--fg-3": "color",
+      "--fg-4": "color",
+      "--accent": "color",
+      "--accent-dim": "color",
+      "--accent-ink": "color",
+      "--accent-glow": "color",
+      "--glyph-ornament": "color",
+      "--glyph-rule": "color",
+      "--glyph-bullet": "color",
+      "--ls-glyph": "spacing",
+      "--ls-rule": "spacing",
+      "--ramp": "other",
+      "--blobs": "other",
+      "--dir-4": "other",
+      "--dir-8": "other",
+      "--overlay-normal": "other",
+      "--overlay-tangent": "other",
+      "--ok": "color",
+      "--warn": "color",
+      "--font-mono": "font",
+      "--font-ui": "font",
+      "--t-micro": "spacing",
+      "--t-label": "spacing",
+      "--t-meta": "spacing",
+      "--t-body": "spacing",
+      "--t-base": "spacing",
+      "--t-lg": "spacing",
+      "--t-h2": "spacing",
+      "--t-h1": "spacing",
+      "--t-display": "spacing",
+      "--w-light": "font",
+      "--w-regular": "font",
+      "--w-medium": "font",
+      "--w-semibold": "font",
+      "--w-bold": "font",
+      "--ls-label": "spacing",
+      "--ls-tight": "spacing",
+      "--ls-num": "spacing",
+      "--lh-tight": "other",
+      "--lh-snug": "other",
+      "--lh-body": "other",
+      "--sp-1": "spacing",
+      "--sp-2": "spacing",
+      "--sp-3": "spacing",
+      "--sp-4": "spacing",
+      "--sp-5": "spacing",
+      "--sp-6": "spacing",
+      "--sp-8": "spacing",
+      "--sp-10": "spacing",
+      "--sp-12": "spacing",
+      "--sp-16": "spacing",
+      "--sp-20": "spacing",
+      "--r-xs": "spacing",
+      "--r-sm": "spacing",
+      "--r-md": "spacing",
+      "--r-lg": "spacing",
+      "--r-pill": "spacing",
+      "--elev-flat": "shadow",
+      "--elev-rail": "shadow",
+      "--dur-fast": "other",
+      "--dur-base": "other",
+      "--dur-slow": "other",
+      "--ease": "other",
+      "--ease-out": "other",
+      "--hit": "spacing",
+      "--hit-mini": "spacing",
+      "--hit-toggle": "spacing",
+      "--label-col": "spacing",
+      "--rule-glyph": "other",
+      "--rule-cap": "other"
+    },
+    "fontFamilies": [
+      "IBM Plex Mono"
+    ]
+  }
+}

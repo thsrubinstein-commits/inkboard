@@ -1,0 +1,38 @@
+name: Garmin sleep sync
+
+# Pulls last night's Garmin sleep/recovery and writes it into Supabase.
+# Runs every morning; also runnable on demand from the Actions tab.
+
+on:
+  schedule:
+    # 11:10 UTC ≈ 7:10am US-Eastern (after Garmin has finished processing the night).
+    # cron is always UTC; adjust if you move time zones.
+    - cron: "10 11 * * *"
+  workflow_dispatch: {}   # manual "Run workflow" button
+
+concurrency:
+  group: garmin-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install -r scripts/requirements.txt
+
+      - name: Sync last night's sleep
+        env:
+          GARMIN_TOKEN_BASE64: ${{ secrets.GARMIN_TOKEN_BASE64 }}
+          GARMIN_EMAIL:        ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASSWORD:     ${{ secrets.GARMIN_PASSWORD }}
+          SUPABASE_URL:        ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_USER_ID:    ${{ secrets.SUPABASE_USER_ID }}
+        run: python scripts/garmin_sync.py
