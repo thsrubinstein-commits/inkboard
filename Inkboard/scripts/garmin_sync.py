@@ -88,7 +88,7 @@ def deep_find(obj, keys):
     return None
 
 
-def fetch_sleep(target_date: dt.date) -> dict:
+def fetch_sleep(target_date):
     username = display_name()
     ds = target_date.isoformat()
     sleep = garth.connectapi(
@@ -103,16 +103,44 @@ def fetch_sleep(target_date: dt.date) -> dict:
         if isinstance(ss, dict):
             score = first(ss, "overall", "value") or ss.get("overallScore") or ss.get("value")
     if score is None:
-        score = deep_find(dto.get("sleepScores") or sleep.get("sleepScores"), {"value", "overallScore"})
-    if score is None:
-        log(f"DTO dump {ds}:", json.dumps(dto)[:1500])
-        log(f"top-level keys {ds}:", list(sleep.keys()))
+        score = deep_find(sleep, {"overallScore"}) or deep_find(sleep.get("sleepScores") or dto.get("sleepScores"), {"value"})
 
-    deep = secs_to_min(dto.get("deepSleepSeconds"))
-    rem = secs_to_min(dto.get("remSleepSeconds"))
-    light = secs_to_min(dto.get("lightSleepSeconds"))
-    awake = secs_to_min(dto.get("awakeSleepSeconds"))
-    duration = secs_to_min(dto.get("sleepTimeSeconds"))
+    deep_s = dto.get("deepSleepSeconds")
+    rem_s = dto.get("remSleepSeconds")
+    light_s = dto.get("lightSleepSeconds")
+    awake_s = dto.get("awakeSleepSeconds")
+    dur_s = dto.get("sleepTimeSeconds")
+
+    levels = sleep.get("sleepLevels") or dto.get("sleepLevels")
+    if dur_s is None and isinstance(levels, list) and levels:
+        bucket = {0: 0, 1: 0, 2: 0, 3: 0}
+        for seg in levels:
+            try:
+                start = float(seg.get("startGMT") or seg.get("startTimeGMT") or 0)
+                end = float(seg.get("endGMT") or seg.get("endTimeGMT") or 0)
+                lvl = int(seg.get("activityLevel", seg.get("value", -1)))
+            except (TypeError, ValueError):
+                continue
+            dur = max(0.0, end - start)
+            if dur > 100000:
+                dur = dur / 1000.0
+            if lvl in bucket:
+                bucket[lvl] += dur
+        if any(bucket.values()):
+            deep_s = deep_s if deep_s is not None else bucket[0]
+            light_s = light_s if light_s is not None else bucket[1]
+            rem_s = rem_s if rem_s is not None else bucket[2]
+            awake_s = awake_s if awake_s is not None else bucket[3]
+            dur_s = bucket[0] + bucket[1] + bucket[2]
+
+    deep = secs_to_min(deep_s)
+    rem = secs_to_min(rem_s)
+    light = secs_to_min(light_s)
+    awake = secs_to_min(awake_s)
+    duration = secs_to_min(dur_s)
+
+    if score is None and duration is None:
+        log(f"FULL RESPONSE {ds}:", json.dumps(sleep)[:3000])
 
     resting_hr = hrv = body_battery = None
     try:
@@ -137,7 +165,7 @@ def fetch_sleep(target_date: dt.date) -> dict:
     }
 
 
-def upsert(row: dict):
+def upsert(row):
     url = os.environ["SUPABASE_URL"].rstrip("/")
     key = os.environ["SUPABASE_SERVICE_KEY"]
     user_id = os.environ["SUPABASE_USER_ID"]
@@ -156,16 +184,21 @@ def upsert(row: dict):
     log(f"upserted sleep for {row['date']}: score={row['score']} dur={row['duration_min']}min")
 
 
+def has_data(row):
+    return row.get("score") is not None or bool(row.get("duration_min")) or bool(row.get("deep_min")) or bool(row.get("light_min"))
+
+
 def main():
     authenticate()
     today = dt.date.today()
-    for target in (today, today - dt.timedelta(days=1)):
+    for offset in range(0, 4):
+        target = today - dt.timedelta(days=offset)
         row = fetch_sleep(target)
-        if row.get("score") is not None or row.get("duration_min"):
+        if has_data(row):
             upsert(row)
             return
-        log(f"no sleep data yet for {target.isoformat()}, trying earlier")
-    log("no usable sleep data found; leaving previous value in place")
+        log(f"no sleep data for {target.isoformat()}, trying earlier")
+    log("no usable sleep data found in the last 4 days; leaving previous value in place")
 
 
 if __name__ == "__main__":
