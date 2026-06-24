@@ -1,0 +1,49 @@
+name: Garmin sleep sync
+
+# Pulls your most recent recorded Garmin sleep score into Supabase.
+# Garmin usually posts the night's score around ~7am local, so we attempt in a short
+# morning window. The job is cache-first + cooldown-aware: once today's score is stored
+# it no-ops, and if Garmin rate-limits it backs off (state in garmin_sync_state) instead
+# of hammering. Extra triggers are cheap no-ops.
+
+on:
+  schedule:
+    # cron is UTC. ~7am US-Eastern (EDT = UTC-4): 11:05, plus two follow-ups in case the
+    # score posts a little later. Once captured, the follow-ups skip via cooldown.
+    - cron: "5 11 * * *"     # ~7:05am ET
+    - cron: "5 12 * * *"     # ~8:05am ET (catch a late post)
+    - cron: "30 13 * * *"    # ~9:30am ET (final safety net)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Force a sync now (bypass cooldown/cache)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: garmin-sync          # never run two at once (single-flight at the CI layer)
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install -r scripts/requirements.txt
+
+      - name: Sync most recent sleep score
+        env:
+          FORCE:               ${{ inputs.force && '1' || '' }}
+          GARMIN_TOKEN_BASE64: ${{ secrets.GARMIN_TOKEN_BASE64 }}
+          GARMIN_EMAIL:        ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASSWORD:     ${{ secrets.GARMIN_PASSWORD }}
+          SUPABASE_URL:        ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_USER_ID:    ${{ secrets.SUPABASE_USER_ID }}
+        run: python scripts/garmin_sync.py
