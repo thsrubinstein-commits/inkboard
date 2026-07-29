@@ -1,6 +1,6 @@
 // OneSlate service worker — offline shell, but always prefers fresh content so new
 // deploys show up immediately. Same-origin GETs only; never touches API calls.
-const CACHE = 'oneslate-v15';
+const CACHE = 'oneslate-v16';
 
 // Cross-origin hosts we're allowed to cache: the MediaPipe eye-control runtime
 // (WASM + model), lazy-loaded from a CDN only when the user enables eye control.
