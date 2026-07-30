@@ -186,7 +186,8 @@ export function classifyRun(a: any): string {
   const km = (a.distance || 0) / 1000;
   if (a.workout_type === 1 || /race/.test(name)) return "race";
   if (a.workout_type === 3 || /tempo|interval|workout|threshold|speed/.test(name)) return "workout";
-  if (km >= 16 || /long/.test(name)) return "long";
+  // workout_type === 2 is Strava's own "Long Run" tag; ≥14 km (~8.7 mi) covers most long runs
+  if (a.workout_type === 2 || km >= 14 || /long/.test(name)) return "long";
   return "easy";
 }
 
