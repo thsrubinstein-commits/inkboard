@@ -207,11 +207,14 @@ document.addEventListener('DOMContentLoaded', async function() {
    Two kinds of notifications:
      1. A fixed daily "sync your sleep" nudge (edit SLEEP below).
      2. One per dated thing you've set in the app — every Calendar event, and every
-        to-do that has a time + a date. Set those the normal way in the app:
+        to-do that has a time + a date. Set those the normal way:
           • Calendar composer:  "Dentist Thursday at 2"  /  "Gym at 6pm tomorrow"
           • To-do quick capture: start the line with a 24h time, e.g. "18:30 Gym"
-        These reschedule/cancel automatically as you add, finish, or change items. */
+   The engine re-syncs on every change, on focus, and just before the app backgrounds,
+   so freshly-added items get scheduled before iOS suspends the app. Console logs are
+   tagged [osnotif] so behaviour is visible in Xcode's console. */
 (function () {
+  var TAG = '[osnotif]';
   var SLEEP = {
     id: 1001, hour: 8, minute: 0,
     title: 'Sync your sleep',
@@ -229,7 +232,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   function desired(state, now) {
     if (!state) return [];
     now = now || Date.now();
-    var HORIZON = now + 1000 * 60 * 60 * 24 * 120, LEAD = 30000, out = [];
+    var HORIZON = now + 1000 * 60 * 60 * 24 * 120, LEAD = 15000, out = [];
     function fireAt(dateKey, time) {
       var dp = dateKey.split('-').map(Number), tp = (time || '09:00').split(':').map(Number);
       return new Date(dp[0], dp[1] - 1, dp[2], tp[0], tp[1], 0).getTime();
@@ -265,7 +268,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     var C = window.Capacitor;
     var native = C && (!C.isNativePlatform || C.isNativePlatform());
     if (native && C.Plugins && C.Plugins.LocalNotifications) return cb(C.Plugins.LocalNotifications);
-    if (tries > 40) return;                    // not native (browser) → do nothing
+    if (tries > 40) { return; }                 // not native (browser) → do nothing
     setTimeout(function () { whenReady(cb, tries + 1); }, 250);
   }
 
@@ -273,19 +276,20 @@ document.addEventListener('DOMContentLoaded', async function() {
     (async function () {
       try {
         var p = await LN.checkPermissions();
-        if (p.display !== 'granted') { p = await LN.requestPermissions(); if (p.display !== 'granted') return; }
+        if (p.display !== 'granted') { p = await LN.requestPermissions(); }
+        if (p.display !== 'granted') { console.log(TAG, 'permission not granted:', p.display); return; }
+        console.log(TAG, 'permission granted — engine active');
         cb();
-      } catch (e) {}
+      } catch (e) { console.log(TAG, 'permission error', e); }
     })();
   }
 
-  var _busy = false, _lastSig = '';
-  function reconcile(LN) {
+  var _busy = false, _lastSig = '', _sleepSet = false;
+  function reconcile(LN, why) {
     if (_busy) return; _busy = true;
     (async function () {
       try {
         var want = desired(boardState());
-        // Skip the round-trip if nothing changed since last time.
         var sig = want.map(function (w) { return w.id + '@' + w.at; }).join(',');
         if (sig !== _lastSig) {
           var wantIds = {}; want.forEach(function (w) { wantIds[w.id] = 1; });
@@ -295,26 +299,38 @@ document.addEventListener('DOMContentLoaded', async function() {
               .map(function (n) { return { id: n.id }; });
             if (stale.length) await LN.cancel({ notifications: stale });
           } catch (e) {}
-          var notifs = want.map(function (w) {
-            return { id: w.id, title: w.title, body: w.body,
-              schedule: { at: new Date(w.at), allowWhileIdle: true } };
-          });
-          if (notifs.length) await LN.schedule({ notifications: notifs });
+          if (want.length) {
+            await LN.schedule({ notifications: want.map(function (w) {
+              return { id: w.id, title: w.title, body: w.body,
+                schedule: { at: new Date(w.at), allowWhileIdle: true } };
+            }) });
+          }
           _lastSig = sig;
+          console.log(TAG, 'reconcile(' + (why || '') + '): scheduled ' + want.length + ' timed item(s)'
+            + (want.length ? ' · next: ' + want[0].title + ' @ ' + new Date(want[0].at).toLocaleString() : ''));
         }
-        // Always (re)assert the fixed daily sleep reminder (rescheduling the same id is a no-op-ish replace).
-        await LN.schedule({ notifications: [{ id: SLEEP.id, title: SLEEP.title, body: SLEEP.body,
-          schedule: { on: { hour: SLEEP.hour, minute: SLEEP.minute }, allowWhileIdle: true } }] });
-      } catch (e) {} finally { _busy = false; }
+        if (!_sleepSet) {
+          await LN.schedule({ notifications: [{ id: SLEEP.id, title: SLEEP.title, body: SLEEP.body,
+            schedule: { on: { hour: SLEEP.hour, minute: SLEEP.minute }, allowWhileIdle: true } }] });
+          _sleepSet = true;
+          console.log(TAG, 'daily sleep reminder set for ' + SLEEP.hour + ':' + two(SLEEP.minute));
+        }
+      } catch (e) { console.log(TAG, 'reconcile error', e); } finally { _busy = false; }
     })();
   }
 
   whenReady(function (LN) {
     ensurePerm(LN, function () {
-      reconcile(LN);
-      setInterval(function () { reconcile(LN); }, 5 * 60 * 1000);           // periodic catch-up
-      document.addEventListener('visibilitychange', function () { if (!document.hidden) reconcile(LN); });
-      window.addEventListener('focus', function () { reconcile(LN); });
+      var run = function (why) { return function () { reconcile(LN, why); }; };
+      reconcile(LN, 'startup');
+      // Re-sync often enough that a just-added item schedules within seconds…
+      setInterval(run('interval'), 15 * 1000);
+      // …and immediately at the moments that matter, ESPECIALLY before the app is
+      // backgrounded/locked (visibilitychange fires with hidden=true then).
+      document.addEventListener('visibilitychange', run('visibility'));
+      window.addEventListener('focus', run('focus'));
+      window.addEventListener('blur', run('blur'));
+      window.addEventListener('pagehide', run('pagehide'));
     });
   });
 })();
