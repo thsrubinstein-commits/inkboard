@@ -1,0 +1,48 @@
+{
+  "order": [
+    "6f8bf93b-527b-419a-af9f-21a59ce2ff03",
+    "9c824682-3e77-4855-9cd2-b6940b73554a",
+    "e5da1425-8453-45e6-a36a-3572f8876efa",
+    "055636a4-ac9c-4a79-8537-ba5b23211967",
+    "03563da2-d6ea-4dbf-b41d-677c6defad52",
+    "3c2116c2-d0ec-4241-a71b-4de9b26cb03e",
+    "d52f1ad2-0e5a-41d6-9996-57a4b2aa5fa3"
+  ],
+  "assets": {
+    "6f8bf93b-527b-419a-af9f-21a59ce2ff03": {
+      "mime": "text/javascript",
+      "compressed": true,
+      "file": "6f8bf93b-527b-419a-af9f-21a59ce2ff03.js"
+    },
+    "9c824682-3e77-4855-9cd2-b6940b73554a": {
+      "mime": "application/javascript",
+      "compressed": true,
+      "file": "9c824682-3e77-4855-9cd2-b6940b73554a.js"
+    },
+    "e5da1425-8453-45e6-a36a-3572f8876efa": {
+      "mime": "font/woff2",
+      "compressed": false,
+      "file": "e5da1425-8453-45e6-a36a-3572f8876efa.woff2"
+    },
+    "055636a4-ac9c-4a79-8537-ba5b23211967": {
+      "mime": "font/woff2",
+      "compressed": false,
+      "file": "055636a4-ac9c-4a79-8537-ba5b23211967.woff2"
+    },
+    "03563da2-d6ea-4dbf-b41d-677c6defad52": {
+      "mime": "font/woff2",
+      "compressed": false,
+      "file": "03563da2-d6ea-4dbf-b41d-677c6defad52.woff2"
+    },
+    "3c2116c2-d0ec-4241-a71b-4de9b26cb03e": {
+      "mime": "font/woff2",
+      "compressed": false,
+      "file": "3c2116c2-d0ec-4241-a71b-4de9b26cb03e.woff2"
+    },
+    "d52f1ad2-0e5a-41d6-9996-57a4b2aa5fa3": {
+      "mime": "font/woff2",
+      "compressed": false,
+      "file": "d52f1ad2-0e5a-41d6-9996-57a4b2aa5fa3.woff2"
+    }
+  }
+}
