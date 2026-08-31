@@ -6070,16 +6070,20 @@ class Component extends DCLogic {
   }
 
   // ---- easy-day HR ceiling, learned from the athlete's own most disciplined easy runs (not a
-  // generic formula) — the quartile of easy-tagged runs with the lowest HR is what "actually easy"
-  // looks like for this athlete; a small cushion above that is the hard cap for today. ----
+  // generic formula) — averaging the lowest ~20% of easy-tagged HRs (not a single percentile
+  // point) is robust to the "secretly hard" easy days that would otherwise drag a single-point
+  // estimate up; a tight cushion above that average is the hard cap for today. Prefers the last
+  // ~4 months so the ceiling tracks current fitness, falling back to full history if that's thin. ----
   _easyHrCeiling(s) {
-    const hrs = (s.runs || [])
-      .filter(r => (r.type || 'easy') === 'easy' && r.avg_hr)
-      .map(r => r.avg_hr)
-      .sort((a, b) => a - b);
+    const now = new Date();
+    const all = (s.runs || []).filter(r => (r.type || 'easy') === 'easy' && r.avg_hr);
+    const recent = all.filter(r => r._d && (now - r._d) < 120 * 864e5);
+    const pool = recent.length >= 5 ? recent : all;
+    const hrs = pool.map(r => r.avg_hr).sort((a, b) => a - b);
     if (hrs.length < 3) return null;
-    const genuine = hrs[Math.max(0, Math.floor(hrs.length * 0.25) - 1)];
-    return { ceiling: Math.round(genuine + 5), floor: Math.round(genuine - 10) };
+    const n = Math.max(1, Math.round(hrs.length * 0.2));
+    const genuine = hrs.slice(0, n).reduce((a, b) => a + b, 0) / n;
+    return { ceiling: Math.round(genuine + 3), floor: Math.round(genuine - 10) };
   }
   // ---- HR-at-easy-pace trend: are you getting fitter at the same effort, or drifting? Compares
   // speed-per-heartbeat on easy runs over the last 2 weeks vs the 2 weeks before that. Flat or
