@@ -4469,6 +4469,7 @@ class Component extends DCLogic {
           milesThisMonth: +this.kmToMi(rs.monthKm).toFixed(1), daysSinceLastRun: dsl,
           acwr: rs.acwr ? +rs.acwr.toFixed(2) : null, returnFromLayoff,
           weeklyGoalMiles: +this.kmToMi(this.state.running.settings.weekly_goal_km || 0).toFixed(1),
+          runsPerWeek: rs.runsPerWk || null,
         };
         // target zones + race goal so the coach knows what a run was SUPPOSED to be
         // (e.g. "HR higher than it should've been" only means something against these).
@@ -4485,6 +4486,19 @@ class Component extends DCLogic {
             goalTime: (tp && tp.goalTimeLabel) || null,
             weeksToRace: mp.weeksToRace, phase: mp.phase || null,
           };
+          // progression signals: 10% weekly-growth cap, long-run share of the week, HR-at-easy-pace
+          // trend, and the current weekly phase — computed the same way the dashboard coach computes
+          // them, so chat guidance always agrees with the dashboard cards.
+          try {
+            const wt = this._weekTarget(rs, this.state.running.settings.weekly_goal_km || 48.28, h.recovery != null ? h.recovery : null, mp);
+            const hrCap = this._easyHrCeiling(rs);
+            const hrTrend = this._hrEfficiencyTrend(rs);
+            ctx.training.weekPhase = wt.weekPhase;
+            ctx.training.weeklyGrowthCapPct = 10;
+            ctx.training.longRunShareOfWeekPct = rs.avgWeekKm ? Math.round((rs.longestRecentKm / rs.avgWeekKm) * 100) : null;
+            ctx.training.easyHrCeilingBpm = hrCap ? hrCap.ceiling : null;
+            ctx.training.hrEfficiencyTrend = hrTrend ? (hrTrend.rising ? 'rising (concerning)' : 'flat or improving (good)') : 'not enough data yet';
+          } catch (e) {}
         } catch (e) {}
       }
     } catch (e) {}
@@ -4524,12 +4538,23 @@ class Component extends DCLogic {
     // next workout that keeps them progressing safely.
     ctx.running_coaching = {
       goal: 'Build the user toward the marathon in ctx.training.raceGoal \u2014 progressively and without overreaching.',
-      when_user_reports_a_hard_or_hot_run: [
-        'Compare that run\u2019s avg/max HR and pace to the target zone it was meant to be (easy runs belong in the Easy zone; a higher-than-expected HR at easy pace usually means it was run too hard, under-recovered, hot/humid, dehydrated, or fatigued).',
-        'Name the most likely cause from their real data \u2014 recovery/readiness, load (ACWR), spacing since the last hard day, pace vs the zone, or HR drift within the run.',
-        'Then prescribe ONE specific next workout: type, distance, a target pace pulled from ctx.training.targetPaces, and the effort. For a quality session lay it out as warm-up / main set / cool-down, and give a cue for getting the effort right (stay conversational, hold HR under a ceiling, back off if it climbs).',
+      progression_rules: [
+        'Weekly mileage growth is capped at \u226410% vs last week (ctx.training.milesLastWeek), full stop.',
+        'A long-run distance increase counts against that same 10% budget \u2014 if the long run is stepping up this week, that IS the week\u2019s added stress; do not also push extra midweek volume on top of it. Only add one stressor at a time.',
+        'Schedule a down week (\u224820\u201330% less volume, easy long run, no hard session) proactively every 3\u20134 weeks \u2014 see ctx.training.weekPhase (\u2018deload week\u2019 means this is that week). Don\u2019t wait to be asked.',
+        'If ctx.training.longRunShareOfWeekPct is above ~40%, hold the long run steady and grow midweek (Tue/Thu-style) runs instead, until the long run settles back toward roughly a third of the week.',
+        'Only push volume or intensity up when ctx.training.hrEfficiencyTrend is flat or improving. If it says rising/concerning (HR creeping up at easy pace \u2014 aerobic decoupling), hold or back off even if load and schedule look fine \u2014 that\u2019s the early-overreaching signal, trust it over ACWR.',
       ],
-      keep_easy_easy: 'Keep ~80% of miles easy; only add intensity when recovery and load allow. Never prescribe a long run or hard session as the first run back from time off.',
+      easy_day_hr_cap: 'Prescribe easy runs to a hard HR ceiling, not just a pace: ctx.training.easyHrCeilingBpm (learned from the user\u2019s own most disciplined easy runs). Tell them explicitly to slow down or walk hills to stay under it \u2014 pace is secondary on an easy day. An easy run with HR above that ceiling ran too hot, regardless of what the pace looked like.',
+      speed_work: 'Speed work is now a regular part of the week, not an occasional extra \u2014 the user wants to get faster. Once weekly frequency (~5 runs/wk) and volume (~20+ mi/wk) support it and ctx.training.hrEfficiencyTrend is flat or improving, run TWO quality sessions a week instead of one: a tempo/threshold session AND a genuine VO2max/speed-interval session (short reps at ~5K effort \u2014 e.g. 6\u20138 \u00d7 400m or 5\u20136 \u00d7 800m \u2014 not just threshold work relabeled). Alternate which one leads week to week so both show up regularly. Drop to one session (or skip speed) during a deload week, in the taper, or when the HR-efficiency trend is rising \u2014 same gates as volume progression.',
+      protect_8020: 'Keep ~80% of weekly time truly easy and ~20% hard \u2014 now usually two quality sessions a week (see speed_work above) rather than one, but the ratio itself doesn\u2019t change: everything that isn\u2019t one of those two sessions (or the marathon-pace segment inside the long run during sharpening) stays genuinely easy, under the HR ceiling above. Don\u2019t let an easy day quietly become a moderately-hard day, and don\u2019t let \u201cmore speed work\u201d become more than two hard days in a week.',
+      hard_day_spacing: 'Never schedule two hard days (workout, long run, or race) back to back. Always follow a long run or a workout with a true easy day or full rest.',
+      when_user_reports_a_hard_or_hot_run: [
+        'Compare that run\u2019s avg/max HR and pace to the target zone it was meant to be (easy runs belong under ctx.training.easyHrCeilingBpm; a higher-than-expected HR at easy pace usually means it was run too hard, under-recovered, hot/humid, dehydrated, or fatigued).',
+        'Name the most likely cause from their real data \u2014 recovery/readiness, load (ACWR), the HR efficiency trend, spacing since the last hard day, pace vs the zone, or HR drift within the run.',
+        'Then prescribe ONE specific next workout: type, distance, a target pace pulled from ctx.training.targetPaces, an HR ceiling if it\u2019s an easy day, and the effort. For a quality session lay it out as warm-up / main set / cool-down, and give a cue for getting the effort right.',
+      ],
+      never_first_run_back_hard: 'Never prescribe a long run or hard session as the first run back from time off.',
       note: 'Practical coaching grounded in their real numbers \u2014 not medical advice.',
     };
     try {
@@ -6044,8 +6069,40 @@ class Component extends DCLogic {
     return { level, label, color, paceAdd, note, downgradeQuality, deferLong, shortenLong, capLong, feels: f, temp: w.temp };
   }
 
+  // ---- easy-day HR ceiling, learned from the athlete's own most disciplined easy runs (not a
+  // generic formula) — the quartile of easy-tagged runs with the lowest HR is what "actually easy"
+  // looks like for this athlete; a small cushion above that is the hard cap for today. ----
+  _easyHrCeiling(s) {
+    const hrs = (s.runs || [])
+      .filter(r => (r.type || 'easy') === 'easy' && r.avg_hr)
+      .map(r => r.avg_hr)
+      .sort((a, b) => a - b);
+    if (hrs.length < 3) return null;
+    const genuine = hrs[Math.max(0, Math.floor(hrs.length * 0.25) - 1)];
+    return { ceiling: Math.round(genuine + 5), floor: Math.round(genuine - 10) };
+  }
+  // ---- HR-at-easy-pace trend: are you getting fitter at the same effort, or drifting? Compares
+  // speed-per-heartbeat on easy runs over the last 2 weeks vs the 2 weeks before that. Flat or
+  // improving is the green light to add load; a meaningful drop (HR creeping up for the same pace —
+  // aerobic decoupling) is an early-overreaching signal — hold or back off, don't add miles. ----
+  _hrEfficiencyTrend(s) {
+    const now = new Date();
+    const easy = (s.runs || []).filter(r => (r.type || 'easy') === 'easy' && r.avg_hr && r.avg_pace_sec_km);
+    const eff = r => (1000 / r.avg_pace_sec_km) / r.avg_hr; // speed per heartbeat — higher is better
+    const inRange = (a, b) => easy.filter(r => { const d = (now - r._d) / 864e5; return d >= a && d < b; });
+    const recent = inRange(0, 14), prior = inRange(14, 35);
+    if (recent.length < 2 || prior.length < 2) return null; // not enough signal yet
+    const avg = a => a.reduce((t, r) => t + eff(r), 0) / a.length;
+    const delta = (avg(recent) / avg(prior)) - 1; // + = more efficient (good), - = drifting worse
+    return { delta: Math.round(delta * 1000) / 1000, rising: delta < -0.04, flatOrImproving: delta >= -0.04 };
+  }
+
   // ---- weekly volume target + phase (shared by the coach and the week plan so they always agree) ----
-  _weekTarget(s, goalKm, ready) {
+  // Growth is capped at ≤10% week-over-week; a long-run step-up counts against that same budget so a
+  // mileage jump and a long-run PR never stack in the same week; a down week is scheduled proactively
+  // every 3–4 weeks instead of waiting to be asked; and progression is gated on the HR-at-easy-pace
+  // trend — if easy-pace HR is drifting up, hold or back off even if load/ACWR look fine. ----
+  _weekTarget(s, goalKm, ready, mp) {
     const wkStart = this._startOfWeek(new Date());
     const weekKmAt = back => {
       const a = new Date(wkStart); a.setDate(a.getDate() - 7 * back);
@@ -6054,13 +6111,36 @@ class Component extends DCLogic {
     };
     const doneKm = weekKmAt(0);
     const prev = [weekKmAt(1), weekKmAt(2), weekKmAt(3)];
+    const wk4 = weekKmAt(4);
     const base = s.avgWeekKm || s.last7 || goalKm * 0.6;
     const building3 = prev[0] > prev[1] * 1.02 && prev[1] > prev[2] * 1.02 && prev[2] > 0; // 3 straight builds → cut back
+
+    // proactively due for a down week? true once ~3-4 weeks have climbed with no real cutback yet.
+    const isDownWeek = (cur, priorWk) => priorWk > 0 && cur <= priorWk * 0.82;
+    const hadDownRecently = isDownWeek(prev[0], prev[1]) || isDownWeek(prev[1], prev[2]) || isDownWeek(prev[2], wk4);
+    const climbedStreak = prev[0] > 0 && prev[1] > 0 && prev[2] > 0 && !hadDownRecently;
+    const dueForDownWeek = climbedStreak && base > goalKm * 0.4;
+
+    // HR-at-easy-pace trend gates progression regardless of what load/ACWR say.
+    const hrTrend = this._hrEfficiencyTrend(s);
+    const hrOk = !hrTrend || hrTrend.flatOrImproving;
+
     let targetKm, weekPhase, weekPhaseColor;
-    if (building3 && base > goalKm * 0.5) {
-      targetKm = base * 0.8; weekPhase = 'deload week'; weekPhaseColor = '#c9b87e';
+    if (dueForDownWeek || (building3 && base > goalKm * 0.5)) {
+      targetKm = base * 0.75; weekPhase = 'deload week'; weekPhaseColor = '#c9b87e';
+    } else if (!hrOk && base < goalKm * 0.98) {
+      targetKm = Math.max(base, doneKm); weekPhase = 'holding — HR drifting, let it settle'; weekPhaseColor = '#c9b87e';
     } else if (s.weeksActive >= 3 && base < goalKm * 0.98 && (ready == null || ready >= 45)) {
-      targetKm = Math.min(goalKm, Math.max(base * 1.08, base + 4.8)); weekPhase = 'building +8%'; weekPhaseColor = 'var(--accent)';
+      const lastWk = prev[0] > 0 ? prev[0] : base;
+      const longNow = this._longTargetKm(s, base, mp);
+      const longGrowthKm = Math.max(0, longNow - (s.longestRecentKm || 0));
+      const capKm = lastWk * 1.10; // ≤10% week-over-week, full stop
+      // a long-run step-up this week IS the week's stressor budget — don't stack extra growth on top.
+      targetKm = longGrowthKm > 0.15
+        ? Math.min(goalKm, capKm, lastWk + longGrowthKm)
+        : Math.min(goalKm, capKm);
+      weekPhase = longGrowthKm > 0.15 ? 'building — long run step up' : `building +${Math.max(1, Math.round((targetKm / lastWk - 1) * 100))}%`;
+      weekPhaseColor = 'var(--accent)';
     } else if (base >= goalKm * 0.98) {
       targetKm = goalKm; weekPhase = 'at goal · maintain'; weekPhaseColor = '#9cb3a0';
     } else {
@@ -6068,16 +6148,19 @@ class Component extends DCLogic {
     }
     const remainKm = Math.max(0, targetKm - doneKm);
     const weekPct = Math.max(0, Math.min(100, Math.round((doneKm / (targetKm || 1)) * 100)));
-    return { targetKm, weekPhase, weekPhaseColor, base, doneKm, remainKm, weekPct, building3 };
+    return { targetKm, weekPhase, weekPhaseColor, base, doneKm, remainKm, weekPct, building3, dueForDownWeek, hrTrend };
   }
 
   // ---- recommended long-run distance (km): progress ~1 mi past your recent longest, capped at the
-  // phase-appropriate target — replaces the old formula that pinned every long run to 12 km (7.5 mi). ----
+  // phase-appropriate target — replaces the old formula that pinned every long run to 12 km (7.5 mi).
+  // Holds the long run flat once it's already a big share (>40%) of weekly volume — growth goes to
+  // midweek runs instead, so the long run settles back toward ~1/3 of the week rather than creeping past it. ----
   _longTargetKm(s, base, mplan) {
     const longGoalKm = (mplan && mplan.longTargetMi) ? mplan.longTargetMi / 0.621371 : Math.max(12.9, base * 0.42);
     const recentLongKm = s.longestRecentKm || 0;
+    const longShareHigh = base > 0 && recentLongKm > 0 && (recentLongKm / base) > 0.40;
     let longKm = recentLongKm
-      ? Math.max(recentLongKm, Math.min(longGoalKm, recentLongKm + 1.6))   // grow ~1 mi/wk, never below what you've run
+      ? (longShareHigh ? recentLongKm : Math.max(recentLongKm, Math.min(longGoalKm, recentLongKm + 1.6))) // hold flat if >40% of the week; else grow ~1 mi/wk
       : Math.min(longGoalKm, Math.max(11.3, base * 0.35));                 // no recent long → conservative start
     return Math.min(longKm, 42);
   }
@@ -6124,6 +6207,30 @@ class Component extends DCLogic {
     return { name: 'Continuous tempo', sets: '15–25 min continuous @ threshold (grow it across the block)',
       pace: thrP, cue: 'Comfortably hard and steady — "hard to talk" but not gasping.' };
   }
+  // the day's SPEED session (VO2max/5K-effort short reps), by phase — a distinct, faster stimulus
+  // from the tempo/threshold work above. Raises your ceiling (running economy + top-end speed)
+  // rather than marathon fitness, so it stays short and controlled, not a fitness test.
+  _speedWorkout(phase, base, tp) {
+    const z = n => (tp && tp.zones) ? (tp.zones.find(x => x.name === n) || null) : null;
+    const intz = z('Interval');
+    const intP = intz ? intz.range : 'fast but controlled — roughly 5K effort';
+    if (phase === 'taper') {
+      return { name: 'Speed tune-up · strides', sets: '6 × 20s fast, relaxed strides with full recovery, tacked onto an easy run',
+        pace: 'fast, relaxed', cue: 'Sharp and short — wake the legs up without creating fatigue this close to race day.' };
+    }
+    if (phase === 'sharpen') {
+      return { name: 'VO2max intervals', sets: '5–6 × 800m @ interval pace, 2–3 min jog recovery',
+        pace: intP, cue: 'Hard but repeatable — the same pace on rep 1 and rep 6. This raises your ceiling, not your marathon fitness, so keep the volume modest.' };
+    }
+    return { name: 'Speed intro · short reps', sets: '6–8 × 400m @ interval pace, 90s jog recovery',
+      pace: intP, cue: 'Fast but relaxed form — short enough to stay controlled. Builds leg speed and running economy without real fatigue.' };
+  }
+  // deterministic tempo/speed alternation so both show up across the block without needing to
+  // parse past workout names — even weeks lead with tempo, odd weeks lead with speed.
+  _qualityMix(wkStart) {
+    const wk = Math.floor(wkStart.getTime() / (7 * 864e5));
+    return wk % 2 === 0 ? ['tempo', 'speed'] : ['speed', 'tempo'];
+  }
   // marathon-pace finish for a long run (the most race-specific session): last chunk @ MP.
   _mpFinish(longMi, tp) {
     const mpz = (tp && tp.zones) ? tp.zones.find(x => x.name === 'Marathon') : null;
@@ -6157,8 +6264,9 @@ class Component extends DCLogic {
 
     // ---- weekly volume target + phase (safe ~8% ramp, hold, or deload) ----
     let mp = null; try { mp = this.marathonPlan(); } catch (e) {}
-    const wt = this._weekTarget(s, goalKm, ready);
+    const wt = this._weekTarget(s, goalKm, ready, mp);
     const { targetKm, weekPhase, weekPhaseColor, base, doneKm, remainKm, weekPct } = wt;
+    const deloadWeek = /deload/.test(weekPhase);
     const wkStart = this._startOfWeek(new Date());
 
     // ---- what has this week already covered? ----
@@ -6167,7 +6275,13 @@ class Component extends DCLogic {
     const thisWk = s.runs.filter(r => r._d >= wkStart);
     const longThreshKm = this._longThreshKm(s, base, mp);
     const hadLong = thisWk.some(r => r.type === 'long' || r.type === 'race' || (r.distance_km || 0) >= longThreshKm);
-    const hadQuality = thisWk.some(r => r.type === 'workout');
+    // speed work is a regular part of the week now: target 2 quality sessions (tempo + speed) once
+    // frequency/volume support it, gated on the same HR-efficiency trend as volume progression.
+    const rpwBC = Math.max(3, Math.min(6, Math.round(s.runsPerWk || 4)));
+    const hrTrendGoodBC = !wt.hrTrend || wt.hrTrend.flatOrImproving;
+    const qualityTarget = (rpwBC >= 5 && base >= 32 && hrTrendGoodBC && this._phaseKey(mp) !== 'taper') ? 2 : 1;
+    const qualDoneCount = thisWk.filter(r => r.type === 'workout').length;
+    const hadQuality = qualDoneCount >= qualityTarget;
     const days = s.daysSince == null ? 99 : s.daysSince;
     const yesterdayHard = days <= 1 && s.lastRun && (s.lastRun.type === 'workout' || s.lastRun.type === 'long');
 
@@ -6227,16 +6341,19 @@ class Component extends DCLogic {
       push = ['recover', 'var(--fg-2)'];
     } else if (!hadLong && remainKm > base * 0.25 && (ready == null || ready >= 55)) {
       nextType = 'long';
-      nextKm = this._longTargetKm(s, base, mp);
-      const stepFromLast = s.longestRecentKm && nextKm > s.longestRecentKm + 0.3;
-      headline = 'Long run — build the engine';
-      body = `No long run yet this week. Go ${r1(mi(nextKm))} mi easy and conversational${stepFromLast ? ` — about a mile past your recent longest (${r1(mi(s.longestRecentKm))} mi), a safe step up` : ''}. Long runs grow the aerobic base that makes every other pace feel easier; keep it relaxed and this is the backbone of your progression.`;
-      if (this._phaseKey(mp) === 'sharpen') { const F = this._mpFinish(mi(nextKm), this.trainingPaces()); body += ` You're sharpening for the marathon, so make this a marathon-pace long run: ${F.note}.`; }
-      push = ['build', 'var(--accent)'];
-    } else if (!hadQuality && ((highReady && s.acwr < 1.3) || (ready == null && s.acwr < 1.2 && (s.runsPerWk || 0) >= 4 && base >= 26 && ((mp && mp.weeksToRace != null) || this.state.running.settings.mode === 'rampup' || base >= 40)))) {
+      nextKm = deloadWeek ? this._longTargetKm(s, base, mp) * 0.75 : this._longTargetKm(s, base, mp);
+      const stepFromLast = !deloadWeek && s.longestRecentKm && nextKm > s.longestRecentKm + 0.3;
+      headline = deloadWeek ? 'Down week — easy long run' : 'Long run — build the engine';
+      body = deloadWeek
+        ? `Planned recovery week — go ${r1(mi(nextKm))} mi at an easy, relaxed effort. This is where the last few weeks of building actually lock in; don't chase distance or pace today.`
+        : `No long run yet this week. Go ${r1(mi(nextKm))} mi easy and conversational${stepFromLast ? ` — about a mile past your recent longest (${r1(mi(s.longestRecentKm))} mi), a safe step up` : ''}. Long runs grow the aerobic base that makes every other pace feel easier; keep it relaxed and this is the backbone of your progression.`;
+      if (!deloadWeek && this._phaseKey(mp) === 'sharpen') { const F = this._mpFinish(mi(nextKm), this.trainingPaces()); body += ` You're sharpening for the marathon, so make this a marathon-pace long run: ${F.note}.`; }
+      push = deloadWeek ? ['deload', '#c9b87e'] : ['build', 'var(--accent)'];
+    } else if (!deloadWeek && !hadQuality && ((highReady && s.acwr < 1.3) || (ready == null && s.acwr < 1.2 && (s.runsPerWk || 0) >= 4 && base >= 26 && ((mp && mp.weeksToRace != null) || this.state.running.settings.mode === 'rampup' || base >= 40)))) {
       nextType = 'workout';
-      nextKm = Math.min(Math.max(base * 0.28, 8), 16);
-      const W = this._qualityWorkout(this._phaseKey(mp), base, this.trainingPaces());
+      const kind = this._qualityMix(wkStart)[Math.min(qualDoneCount, 1)];
+      nextKm = kind === 'speed' ? Math.min(Math.max(base * 0.20, 6), 11) : Math.min(Math.max(base * 0.28, 8), 16);
+      const W = kind === 'speed' ? this._speedWorkout(this._phaseKey(mp), base, this.trainingPaces()) : this._qualityWorkout(this._phaseKey(mp), base, this.trainingPaces());
       const readyTag = ready != null ? ` (${ready}/100)` : '';
       headline = `Green light — ${W.name.toLowerCase()}${readyTag}`;
       const openLine = ready != null ? `Recovery is strong${readyPart ? ' (' + readyPart + ')' : ''} and your load has room` : `Your load has room and you're well spaced from your last hard day`;
@@ -6279,6 +6396,16 @@ class Component extends DCLogic {
       }
     }
 
+    // ---- HR ceiling for easy days: pace drifts with terrain/heat/fatigue, HR doesn't — cap it explicitly ----
+    let hrCap = null;
+    if (nextType === 'easy') {
+      const cap = this._easyHrCeiling(s);
+      if (cap) {
+        hrCap = cap.ceiling;
+        body += ` Keep HR under ${cap.ceiling} bpm today — slow down or walk the hills to stay under it, pace is secondary.`;
+      }
+    }
+
     // ---- pace: prefer race-goal training zones, else median-easy heuristic ----
     let paceRange = '—', paceNote = 'log paced runs to calibrate';
     let tp = null; try { tp = this.trainingPaces(); } catch (e) {}
@@ -6309,6 +6436,7 @@ class Component extends DCLogic {
     // heat inflates the pace you'll hold for a given effort — surface it on the target so the
     // number isn't read as a failure on a hot day.
     if (heat && heat.paceAdd > 0 && paceRange !== '—') paceNote += ` · +${heat.paceAdd}s/mi for heat`;
+    if (hrCap && nextType === 'easy') paceNote += ` · cap ${hrCap} bpm`;
     if (nextType === 'rest') { paceRange = '—'; paceNote = 'full rest — no run today'; }
 
     // ---- recovery tile: real readiness when we have it ----
@@ -6345,6 +6473,7 @@ class Component extends DCLogic {
       weekTargetLabel: `${r1(mi(targetKm))} mi`,
       weekPct, weekBarW: weekPct + '%',
       weekPhase, weekPhaseColor,
+      hrCap, deloadWeek,
     };
   }
 
@@ -6361,8 +6490,9 @@ class Component extends DCLogic {
     let mp = null; try { mp = this.marathonPlan(); } catch (e) {}
     let tp = null; try { tp = this.trainingPaces(); } catch (e) {}
     const zr = n => { const z = (tp && tp.zones) ? tp.zones.find(x => x.name === n) : null; return z ? z.range : ''; };
+    const hrCap = this._easyHrCeiling(s);
 
-    const wt = this._weekTarget(s, goalKm, ready);
+    const wt = this._weekTarget(s, goalKm, ready, mp);
     const base = wt.base;
     const deload = /deload/.test(wt.weekPhase);
     const days = s.daysSince == null ? 99 : s.daysSince;
@@ -6379,7 +6509,8 @@ class Component extends DCLogic {
     if (layoff) {
       const n = Math.max(3, rpw - 1);
       const easyKm = Math.max(4, Math.min(8, base * 0.13));
-      for (let i = 0; i < n; i++) sess.push({ kind: 'easy', km: easyKm, note: 'ease back — short & conversational', pace: zr('Easy') });
+      const easeNote = hrCap ? `ease back — short & conversational · cap ${hrCap.ceiling} bpm` : 'ease back — short & conversational';
+      for (let i = 0; i < n; i++) sess.push({ kind: 'easy', km: easyKm, note: easeNote, pace: zr('Easy') });
     } else {
       const phaseK = this._phaseKey(mp);
       const longMiVal = mi(deload ? longKm * 0.75 : longKm);
@@ -6387,16 +6518,29 @@ class Component extends DCLogic {
       // sharpening phase: the long run becomes marathon-pace work — the second quality stimulus.
       if (phaseK === 'sharpen' && !deload) { const F = this._mpFinish(longMiVal, tp); longNote = `easy, then close the last ${F.seg} mi @ marathon pace (${F.pace})`; }
       sess.push({ kind: 'long', km: deload ? longKm * 0.75 : longKm, note: longNote, pace: zr('Long run') });
-      // one dedicated quality day once there's aerobic base + frequency to absorb it (the MP long above is the other).
+      // dedicated quality day(s) once there's aerobic base + frequency to absorb them (the MP long
+      // above is a third stimulus in the sharpening phase). Speed work is now a regular part of the
+      // week, not an occasional extra: once frequency + volume support it, run TWO quality sessions
+      // — one tempo/threshold, one VO2max/speed interval — alternating lead each week, still gated
+      // on the HR-efficiency trend so a second hard day never gets added while it's drifting.
       const wantQual = !deload && rpw >= 4 && base >= 26 &&
         ((mp && mp.weeksToRace != null) || this.state.running.settings.mode === 'rampup' || base >= 40);
-      const nQual = wantQual ? 1 : 0;
-      if (nQual) { const W = this._qualityWorkout(phaseK, base, tp); sess.push({ kind: 'quality', km: Math.max(8, Math.min(14, base * 0.26)), note: `${W.name} · ${W.sets}`, pace: W.pace }); }
+      const hrTrendGood = !wt.hrTrend || wt.hrTrend.flatOrImproving;
+      const wantTwoQual = wantQual && rpw >= 5 && base >= 32 && hrTrendGood && phaseK !== 'taper';
+      const nQual = wantQual ? (wantTwoQual ? 2 : 1) : 0;
+      const mix = this._qualityMix(this._startOfWeek(new Date()));
+      for (let i = 0; i < nQual; i++) {
+        const kind = mix[i];
+        const W = kind === 'speed' ? this._speedWorkout(phaseK, base, tp) : this._qualityWorkout(phaseK, base, tp);
+        const km = kind === 'speed' ? Math.max(6, Math.min(11, base * 0.20)) : Math.max(8, Math.min(14, base * 0.26));
+        sess.push({ kind: 'quality', km, note: `${W.name} · ${W.sets}`, pace: W.pace });
+      }
       const easyDays = Math.max(1, rpw - 1 - nQual);
       const used = sess.reduce((t, x) => t + x.km, 0);
       const easyVol = Math.max(easyDays * 4.8, wt.targetKm - used);
       const perEasy = easyVol / easyDays;
-      for (let i = 0; i < easyDays; i++) sess.push({ kind: 'easy', km: perEasy, note: 'conversational · most of your miles', pace: zr('Easy') });
+      const easyNote = hrCap ? `conversational · cap ${hrCap.ceiling} bpm` : 'conversational · most of your miles';
+      for (let i = 0; i < easyDays; i++) sess.push({ kind: 'easy', km: perEasy, note: easyNote, pace: zr('Easy') });
     }
     // a deliberate rest day when the week calls for recovery (illness / deload / spiking load) — not a filler gap.
     const feel = this._todayCheckin();
