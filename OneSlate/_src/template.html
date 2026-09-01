@@ -5115,9 +5115,13 @@ class Component extends DCLogic {
         m = cand; break;
       }
     }
-    if (m) { const now = new Date(); let y = m[3] ? (m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10)) : now.getFullYear(); const mo = parseInt(m[1], 10), day = parseInt(m[2], 10); if (mo < 1 || mo > 12 || day < 1 || day > 31) return null; const d = new Date(y, mo - 1, day); if (!m[3] && this.keyOf(d) < this.todayKey()) d.setFullYear(y + 1); return this.keyOf(d); }
+    // a syllabus is often dropped in right as its term starts — "August 24" can be a day or two
+    // "in the past" relative to today while still obviously being part of the current term, so
+    // only treat a year-less date as "must mean next year" once it's clearly stale (>75 days gone)
+    const graceKey = this.keyOf((() => { const g = new Date(); g.setDate(g.getDate() - 75); return g; })());
+    if (m) { const now = new Date(); let y = m[3] ? (m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10)) : now.getFullYear(); const mo = parseInt(m[1], 10), day = parseInt(m[2], 10); if (mo < 1 || mo > 12 || day < 1 || day > 31) return null; const d = new Date(y, mo - 1, day); if (!m[3] && this.keyOf(d) < graceKey) d.setFullYear(y + 1); return this.keyOf(d); }
     m = s.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/i);
-    if (m) { const M = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']; const mi = M.indexOf(m[1].toLowerCase().slice(0, 3)); const now = new Date(); const cand = new Date(now.getFullYear(), mi, parseInt(m[2], 10)); if (this.keyOf(cand) < this.todayKey()) cand.setFullYear(now.getFullYear() + 1); return this.keyOf(cand); }
+    if (m) { const M = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']; const mi = M.indexOf(m[1].toLowerCase().slice(0, 3)); const now = new Date(); const cand = new Date(now.getFullYear(), mi, parseInt(m[2], 10)); if (this.keyOf(cand) < graceKey) cand.setFullYear(now.getFullYear() + 1); return this.keyOf(cand); }
     return null;
   }
   // ---- auto-tag: guess the class this syllabus belongs to from its own text ----
@@ -5131,9 +5135,28 @@ class Component extends DCLogic {
     return '';
   }
   cwGuessInstructor(text) {
-    const m = String(text).match(/\b(?:instructors?|professors?|prof\.?)\s*:?\s*(.+)/i);
-    if (!m) return '';
-    return m[1].split(/[\n,;]/)[0].trim().slice(0, 60);
+    // colon is required — a table of contents entry like "Faculty Instructor Page 1" would
+    // otherwise match too (and it's always the first "instructor" mention in a long syllabus)
+    const m = String(text).match(/\b(?:instructors?|professors?|prof\.?)\s*:\s*(.+)/i);
+    let rest;
+    if (m) { rest = m[1].split(/[\n,;]/)[0]; }
+    else {
+      // some syllabi use "FACULTY INSTRUCTOR" as a bare section heading with the name on the
+      // next line, rather than "Instructor: Name" inline — name is usually followed by a
+      // credential (Ph.D., etc.) or a parenthetical, so stop there rather than eating the bio
+      const hm = text.match(/^\s*(?:faculty\s+)?instructors?\s*$/im);
+      if (!hm) return '';
+      const after = text.slice(hm.index + hm[0].length).match(/\S.*/);
+      if (!after) return '';
+      rest = after[0].split(/[,;(]|\bPh\.?D\b/i)[0];
+    }
+    // a 2-column header table ("Instructor: Name    TA Squad: ...") can land on one line once
+    // extracted, with only single-space gaps between columns just like within the name itself —
+    // so cut at a *known* secondary label word rather than any capitalized word, or a real
+    // name (e.g. a hyphenated or middle name) gets truncated too
+    const nextLabel = rest.match(/\s(?:TA|Teaching Assistant|Office|E-?mail|Phone|Room|Location|Hours|Section|Term|Semester|Credits?|Prerequisites?)\b[^:]*:/i);
+    if (nextLabel && nextLabel.index > 0) rest = rest.slice(0, nextLabel.index);
+    return rest.trim().slice(0, 60);
   }
   // pasted syllabi (PDF copy/paste especially) wrap a "Homework:"/"Diet Analysis:"/"Readings:" item across
   // several lines — glue each one back into a single sentence, tagged with whatever "Week N" heading it fell under
@@ -5142,23 +5165,95 @@ class Component extends DCLogic {
     // separated from its content by a blank line — true of every paragraph break when this
     // text came from a Word doc) — so drop them before scanning rather than treating them as
     // a block terminator, which would truncate a label's content down to nothing
-    const lines = String(text).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    const labelRe = /^(homework|diet analysis|readings)\s*:/i;
+    // PDFs built from Word bullet lists often extract their bullet glyph as a Private-Use-Area
+    // codepoint (Wingdings/Symbol leftovers, e.g. U+F0B7) rather than a normal "•" — normalize
+    // it to a real bullet so citationStartRe (and the human reading the title) both recognize it
+    // a running page footer (e.g. "PSY205 - FALL 2026 Table of Contents Page 8") gets reprinted
+    // once per PDF page and, since it sits right at a page break, often lands fused onto
+    // whatever line happens to follow — strip that specific recurring shape wherever it falls,
+    // rather than a generic repeated-line filter, since a real label like "Homework:" can
+    // legitimately repeat just as many times as a real footer does
+    const cleanedText = String(text).replace(/\S.{0,40}?Table of Contents Page \d+\s*/gi, ' ');
+    const lines = cleanedText.split(/\r?\n/).map(l => l.trim().replace(/^[\u{E000}-\u{F8FF}]\s*/u, '• ')).filter(Boolean);
+    // "join" labels (Homework:/Diet Analysis:) describe ONE item that may wrap across lines —
+    // everything gets glued into one sentence. "split" labels (Readings:/Required Reading) are
+    // almost always a LIST — each following line is its own separate reading, not one blob.
+    // Colon is optional so a bare label on its own line (common in Word docs) still matches.
+    // the label must be immediately followed by a colon (then optional content) or be the
+    // *entire* line — "READING MATERIAL:" must NOT parse as label "Reading" + content "MATERIAL:"
+    const joinLabelRe = /^(homework|diet analysis)\s*(?::\s*(.*)|)$/i;
+    const splitLabelRe = /^(readings?|required reading)\s*(?::\s*(.*)|)$/i;
     const weekRe = /^Week\s+(\d+)/i;
-    const stopRe = /^(LO\b|Week\s+\d|Tuesday\s+\d|Wednesday\s+\d|Thursday\s+\d|Friday\s+\d|Monday\s+\d|Chapter\s|Readings\s*:|Homework\s*:|Diet Analysis\s*:)/i;
-    const blocks = []; let curWeek = null; let i = 0;
+    // a line whose whole job is announcing a date/session (not itself a graded item) — many
+    // syllabi list readings right under one of these with no due date of their own, since the
+    // reading is implicitly "for" that class session
+    const sessionHeaderRe = /^(Week\s+\d+\b|WK\s*\d+\b|Class\s+\d+,|Date\s*:|\d{1,2}\/\d{1,2}\s*:|\d{1,2}\/\d{1,2}\s+(LECTURE|RECITATION|EXAM)|(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+\d{1,2}\/\d{1,2})/i;
+    // anything that starts a new labeled section — bounds a join/split block from swallowing
+    // unrelated content below it (a specific list of known labels, plus a generic
+    // "Capitalized Word(s):" catch-all so we don't need to hardcode every professor's label)
+    const boundaryRe = /^(LO\b|Week\s+\d|WK\s*\d+\b|Class\s+\d+,|Tuesday\s+\d|Wednesday\s+\d|Thursday\s+\d|Friday\s+\d|Monday\s+\d|Chapter\s|Readings?\b\s*:|Required Reading\b|Homework\s*:|Diet Analysis\s*:|\d{1,2}\/\d{1,2}\s*:|\d{1,2}\/\d{1,2}\s+(LECTURE|RECITATION|EXAM)|[A-Z][A-Za-z]{2,24}(\s[A-Z][a-z]+){0,2}\s*:\s)/;
+    // same boundary, minus "Chapter " — inside a Readings block "Chapter 9- Title" is a valid
+    // citation to include (citationStartRe below turns it into its own row), not a stop signal
+    const readingBoundaryRe = /^(LO\b|Week\s+\d|WK\s*\d+\b|Class\s+\d+,|Tuesday\s+\d|Wednesday\s+\d|Thursday\s+\d|Friday\s+\d|Monday\s+\d|Readings?\b\s*:|Required Reading\b|Homework\s*:|Diet Analysis\s*:|\d{1,2}\/\d{1,2}\s*:|\d{1,2}\/\d{1,2}\s+(LECTURE|RECITATION|EXAM)|[A-Z][A-Za-z]{2,24}(\s[A-Z][a-z]+){0,2}\s*:\s)/;
+    // inside a Readings block, a line starting a NEW citation ("Chapter 4-", "Textbook", an
+    // "Author – Title" dash citation, a bullet) begins a new row; anything else is a wrapped
+    // continuation of the previous row's title (PDF text wraps a single reading across lines
+    // with no blank-line separator, unlike a Word doc's one-paragraph-per-reading structure)
+    // note: the name/citation half must stay case-SENSITIVE — an /i flag here would make
+    // [A-Z] match lowercase too, so ordinary prose ("Introduction to the course –") would
+    // wrongly look like a citation just for using a dash
+    const citationKeywordRe = /^(chapter\s+\d|textbook|required|supplemental|•|-|\d+[.)]\s)/i;
+    const citationNameRe = /^[A-Z][a-zA-Z.]*(\s[A-Z][a-zA-Z.]*){0,3}['’]?\s*[-–—,]/;
+    const citationStartRe = { test: (s) => citationKeywordRe.test(s) || citationNameRe.test(s) };
+    // "Fall Break – NO CLASS ..." reads like a citation (capitalized words + dash) but is a
+    // schedule note, not a reading — never worth a row on its own
+    const noClassRe = /\bno class\b|\bbreak\b/i;
+    const blocks = []; let curWeek = null; let curDate = null; let justSawHeader = false; let i = 0;
     while (i < lines.length) {
-      const wm = lines[i].match(weekRe); if (wm) curWeek = wm[1];
-      const lm = lines[i].match(labelRe);
-      if (lm) {
-        const norm = lm[1].toLowerCase();
-        const label = norm === 'diet analysis' ? 'Diet Analysis' : norm === 'readings' ? 'Readings' : 'Homework';
-        let buf = [lines[i].replace(labelRe, '').trim()]; i++;
-        while (i < lines.length && !stopRe.test(lines[i])) { buf.push(lines[i]); i++; }
-        const joined = buf.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
-        if (joined) blocks.push({ label, text: joined, week: curWeek });
+      const ln = lines[i];
+      const wm = ln.match(weekRe); if (wm) curWeek = wm[1];
+      const isHeader = sessionHeaderRe.test(ln);
+      if (isHeader) { const d = this.cwFindDate(ln); if (d) curDate = d; }
+
+      const sm = ln.match(splitLabelRe);
+      if (sm) {
+        const inline = (sm[2] || '').trim();
+        i++; justSawHeader = false;
+        let cur = inline || null;
+        const flush = () => { if (cur) blocks.push({ label: 'Readings', text: cur, week: curWeek, fallbackDate: curDate }); cur = null; };
+        while (i < lines.length && !readingBoundaryRe.test(lines[i])) {
+          if (sessionHeaderRe.test(lines[i])) { const d = this.cwFindDate(lines[i]); if (d) curDate = d; }
+          if (!cur || citationStartRe.test(lines[i])) { flush(); cur = lines[i]; }
+          else { cur += ' ' + lines[i]; }
+          i++;
+        }
+        flush();
         continue;
       }
+      const jm = ln.match(joinLabelRe);
+      if (jm) {
+        const label = jm[1].toLowerCase() === 'diet analysis' ? 'Diet Analysis' : 'Homework';
+        let buf = (jm[2] || '').trim() ? [jm[2].trim()] : []; i++; justSawHeader = false;
+        while (i < lines.length && !boundaryRe.test(lines[i])) { buf.push(lines[i]); i++; }
+        const joined = buf.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+        if (joined) blocks.push({ label, text: joined, week: curWeek, fallbackDate: curDate });
+        continue;
+      }
+      // no "Readings:" label at all is common too (a session-date header followed straight by
+      // bare citation lines, e.g. "Class 3, Aug 31. Topic" then "Diamond, Jared. 'Title'...") —
+      // only kick in right after a header line, so policy text elsewhere doesn't get swept up
+      if (justSawHeader && !isHeader && citationStartRe.test(ln) && !boundaryRe.test(ln) && !noClassRe.test(ln)) {
+        let cur = ln; i++; justSawHeader = false;
+        const flush = () => { if (cur) blocks.push({ label: 'Readings', text: cur, week: curWeek, fallbackDate: curDate }); cur = null; };
+        while (i < lines.length && !readingBoundaryRe.test(lines[i]) && !sessionHeaderRe.test(lines[i])) {
+          if (citationStartRe.test(lines[i])) { flush(); cur = lines[i]; }
+          else { cur += ' ' + lines[i]; }
+          i++;
+        }
+        flush();
+        continue;
+      }
+      justSawHeader = isHeader;
       i++;
     }
     return blocks;
@@ -5166,16 +5261,24 @@ class Component extends DCLogic {
   cwHeuristicSyllabus(text) {
     const typeOfLine = (s) => { s = s.toLowerCase(); if (/\b(final|midterm|exam|test)\b/.test(s)) return 'test'; if (/\bquiz(z|zes)?\b/.test(s)) return 'quiz'; if (/\b(read(ing)?|chapter|ch\.|pp?\.)\b/.test(s)) return 'reading'; if (/\b(project|presentation|paper|essay)\b/.test(s)) return 'project'; return 'assignment'; };
     const typeOfBlock = (label, s) => { if (/\b(final|midterm|exam|test)\b/i.test(s)) return 'test'; if (/\bquiz(z|zes)?\b/i.test(s)) return 'quiz'; if (label === 'Diet Analysis') return 'project'; if (label === 'Readings' || /\b(read(ing)?|chapter|ch\.)\b/i.test(s)) return 'reading'; return 'assignment'; };
-    const cleanTitle = (s) => s.replace(/\(due[^)]*\)/i, '').replace(/\s+/g, ' ').trim();
+    const cleanTitle = (s) => s.replace(/\(due[^)]*\)/i, '').replace(/^due\s+\d{1,2}\/\d{1,2}(\/\d{2,4})?\s*(at|by)?\s*[\d:apm.\s]*/i, '').replace(/^[•\-–*]\s*/, '').replace(/\s+/g, ' ').trim();
     const stripDayDatePrefix = (s) => s.replace(/^(Tuesday|Wednesday|Thursday|Friday|Monday)\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s*/i, '').trim();
     const out = []; const seen = new Set(); const blockDates = new Set();
     this.cwHeuristicBlocks(text).forEach(b => {
-      const due = this.cwFindDate(b.text); if (!due) return;
+      const explicitDue = this.cwFindDate(b.text);
+      // a fallback (session/week) date is only trustworthy for Readings — a Homework/Diet
+      // Analysis item with no due date of its own anywhere nearby is usually just descriptive
+      // text (e.g. "record your intake before completing the assignment"), not a real dated task.
+      // For Readings specifically, the session date wins over any date found IN the citation
+      // text — a reading almost never states its own due date, but frequently cites one (a
+      // publication date like "...The New Yorker, April 21, 2008") that would be mistaken for it
+      const due = b.label === 'Readings' ? (b.fallbackDate || explicitDue) : explicitDue;
+      if (!due) return;
       const atype = typeOfBlock(b.label, b.text);
       let title = cleanTitle(b.label === 'Diet Analysis' ? ('Diet Analysis: ' + b.text) : b.text);
       if (b.week && !/\bweek\s*\d/i.test(title)) title = 'Week ' + b.week + ' — ' + title;
       if (!title) return;
-      blockDates.add(due);
+      if (explicitDue) blockDates.add(due);
       const key = due + '|' + title; if (seen.has(key)) return; seen.add(key);
       out.push({ title: title.slice(0, 160), atype, due, points: null, confidence: 'low' });
     });
@@ -5190,7 +5293,7 @@ class Component extends DCLogic {
       out.push({ title: title.slice(0, 160), atype: typeOfLine(ln), due: d, points: null, confidence: 'low' });
     });
     out.sort((a, b) => a.due < b.due ? -1 : a.due > b.due ? 1 : 0);
-    return out.slice(0, 80);
+    return out.slice(0, 140);
   }
   cwParseSyllabus() {
     const text = (this.state.cwSyllabusText || '').trim(); if (!text) return;
@@ -5203,7 +5306,7 @@ class Component extends DCLogic {
     if (!canAI) return;
     try {
       const term = cls && cls.termStart ? (' The term runs ' + cls.termStart + ' to ' + (cls.termEnd || 'the end of the semester') + '.') : '';
-      const prompt = 'Extract every graded item and deadline from this course syllabus. Today is ' + this.todayKey() + '.' + term + ' Reply with ONLY a JSON array; each element {"title":string,"type":"assignment"|"quiz"|"test"|"reading"|"project","due":"YYYY-MM-DD","points":number or null,"confidence":"high"|"low"}. Resolve relative dates like "Week 3" or "Session 5" from the term start and a weekly cadence. If a date is genuinely unknown, still include the item with your best guess and "confidence":"low". Only include real graded work or deadlines. Syllabus:\n' + text;
+      const prompt = 'Extract every graded item, deadline, AND required reading from this course syllabus — not just graded work. Today is ' + this.todayKey() + '.' + term + ' Reply with ONLY a JSON array; each element {"title":string,"type":"assignment"|"quiz"|"test"|"reading"|"project","due":"YYYY-MM-DD","points":number or null,"confidence":"high"|"low"}. Include readings even when ungraded — syllabi often list them under a class date or week heading with no explicit "due" date; in that case use the date of the class session (or the start of the week) they belong to as "due" and mark "confidence":"low". Resolve relative dates like "Week 3" or "Session 5" from the term start and a weekly cadence. If a date is genuinely unknown, still include the item with your best guess and "confidence":"low". One row per reading/assignment — don\'t merge multiple distinct readings from the same day into one row. Syllabus:\n' + text;
       window.claude.complete(prompt).then(res => {
         let arr = null; try { const mch = String(res).match(/\[[\s\S]*\]/); if (mch) arr = JSON.parse(mch[0]); } catch (e) {}
         if (Array.isArray(arr) && arr.length) {
