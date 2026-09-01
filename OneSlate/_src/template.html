@@ -5324,6 +5324,7 @@ class Component extends DCLogic {
   cwConfirmSyllabus() {
     const rows = (this.state.cwParsed || []).filter(r => r.include); if (!rows.length) { this.setState({ cwParsed: null }); return; }
     let cid = this.state.cwSyllabusClassId;
+    const hadExplicitPick = !!cid;
     let created = null;
     if (!cid) {
       const name = (this.state.cwGuessedClassName || '').trim();
@@ -5334,7 +5335,10 @@ class Component extends DCLogic {
       }
     }
     const evs = rows.map(r => ({ id: this.uid(), title: r.title || 'Untitled', date: r.due, time: null, durationMin: null, notes: (r.points != null ? (r.points + ' pts') : null), kind: 'assignment', classId: cid || '', atype: r.atype, points: (r.points != null ? r.points : null), done: false, _rev: Date.now() }));
-    this.setState(s => ({ events: [...(s.events || []), ...evs], classes: created ? [...(s.classes || []), created] : s.classes, cwParsed: null, cwSyllabusText: '', cwParsing: false, cwClassId: cid || s.cwClassId, cwSyllabusClassId: cid || s.cwSyllabusClassId, cwGuessedClassName: '', cwGuessedInstructor: '', cwFlash: (created ? ('Tagged as "' + created.name + '" · ') : '') + 'Added ' + evs.length + ' item' + (evs.length === 1 ? '' : 's') + (cid ? '' : ' (no class set)') }), () => this.persist());
+    // only keep the syllabus panel's class picker pinned to this class if the user chose it
+    // themselves — after an auto-created class, reset to "no class" so the next file dropped
+    // in gets its own fresh auto-tag guess instead of silently merging into this one
+    this.setState(s => ({ events: [...(s.events || []), ...evs], classes: created ? [...(s.classes || []), created] : s.classes, cwParsed: null, cwSyllabusText: '', cwParsing: false, cwClassId: cid || s.cwClassId, cwSyllabusClassId: hadExplicitPick ? cid : '', cwGuessedClassName: '', cwGuessedInstructor: '', cwFlash: (created ? ('Tagged as "' + created.name + '" · ') : '') + 'Added ' + evs.length + ' item' + (evs.length === 1 ? '' : 's') + (cid ? '' : ' (no class set)') }), () => this.persist());
     this.cwFlashClear();
   }
 
