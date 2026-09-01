@@ -3138,11 +3138,11 @@ button, input, textarea, select, [role="button"] {
                 <span style="color:var(--accent); font-size:13px;">✦</span>
                 <span style="font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--fg-1);">Drop a syllabus</span>
                 <sc-if value="{{ cwParsing }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px; color:var(--accent); letter-spacing:0.06em;">· reading…</span></sc-if>
-                <sc-if value="{{ cwPdfBusy }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px; color:var(--accent); letter-spacing:0.06em;">· reading PDF…</span></sc-if>
+                <sc-if value="{{ cwPdfBusy }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px; color:var(--accent); letter-spacing:0.06em;">· reading file…</span></sc-if>
                 <span style="flex:1;"></span>
                 <label data-nodrag="1" style="flex:none; height:26px; padding:0 10px; border-radius:999px; border:1px dashed var(--line-hard); color:var(--fg-2); font-family:var(--font-mono); font-size:10px; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer; display:inline-flex; align-items:center; gap:5px;" style-hover="border-color:var(--accent); color:var(--accent);">
-                  ⇪ Upload PDF
-                  <input data-nodrag="1" type="file" accept="application/pdf,.pdf" onchange="{{ onCwSyllabusFile }}" style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;">
+                  ⇪ Upload file
+                  <input data-nodrag="1" type="file" accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx" onchange="{{ onCwSyllabusFile }}" style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;">
                 </label>
               </div>
               <div style="display:flex; flex-wrap:wrap; gap:6px;">
@@ -3150,7 +3150,7 @@ button, input, textarea, select, [role="button"] {
                   <button data-nodrag="1" onclick="{{ p.onPick }}" style="height:28px; padding:0 11px; border-radius:999px; border:1px solid {{ p.pBg }}; background:{{ p.pBg }}; color:{{ p.pColor }}; font-family:var(--font-mono); font-size:11px; cursor:pointer;">{{ p.label }}</button>
                 </sc-for>
               </div>
-              <textarea data-nodrag="1" value="{{ cwSyllabusText }}" oninput="{{ onCwSyllabus }}" rows="5" placeholder="Paste your syllabus here, or upload the PDF above — dates, assignments, quizzes, exams. I’ll pull out each item and its due date for you to confirm." style="min-height:120px; max-height:280px; padding:12px 13px; background:var(--well); border:1px solid var(--line-hard); border-radius:7px; color:var(--fg-1); font-family:var(--font-mono); font-size:13px; line-height:1.55; resize:vertical;" style-focus="outline:2px solid var(--accent); outline-offset:2px; border-color:var(--accent);"></textarea>
+              <textarea data-nodrag="1" value="{{ cwSyllabusText }}" oninput="{{ onCwSyllabus }}" rows="5" placeholder="Paste your syllabus here, or upload the PDF/Word file above — dates, assignments, quizzes, exams. I’ll pull out each item and its due date for you to confirm." style="min-height:120px; max-height:280px; padding:12px 13px; background:var(--well); border:1px solid var(--line-hard); border-radius:7px; color:var(--fg-1); font-family:var(--font-mono); font-size:13px; line-height:1.55; resize:vertical;" style-focus="outline:2px solid var(--accent); outline-offset:2px; border-color:var(--accent);"></textarea>
               <button data-nodrag="1" onclick="{{ onCwParseSyllabus }}" style="height:42px; background:var(--accent); border:0; border-radius:7px; color:var(--accent-ink); font-family:var(--font-mono); font-size:12px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; cursor:pointer;" style-hover="filter:brightness(1.08);">Extract assignments</button>
             </div>
 
@@ -5026,7 +5026,7 @@ class Component extends DCLogic {
   // ---- syllabus drop-in: heuristic seed instantly, then AI refine if available ----
   cwSetSyllabusText(v) { this.setState({ cwSyllabusText: v }); }
   cwSetSyllabusClass(id) { this.setState({ cwSyllabusClassId: id }); }
-  // ---- PDF upload: pulls in pdf.js on first use, extracts text, then runs the normal syllabus parse ----
+  // ---- PDF/DOCX upload: pulls in pdf.js / mammoth.js on first use, extracts text, then runs the normal syllabus parse ----
   cwEnsurePdfJs() {
     if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
     if (this._pdfjsLoading) return this._pdfjsLoading;
@@ -5039,6 +5039,22 @@ class Component extends DCLogic {
       document.head.appendChild(s);
     }).catch(err => { this._pdfjsLoading = null; throw err; });
     return this._pdfjsLoading;
+  }
+  cwEnsureMammoth() {
+    if (window.mammoth) return Promise.resolve(window.mammoth);
+    if (this._mammothLoading) return this._mammothLoading;
+    this._mammothLoading = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.12.2/mammoth.browser.min.js';
+      s.onload = () => { try { resolve(window.mammoth); } catch (e) { reject(e); } };
+      s.onerror = () => reject(new Error('mammoth-load-failed'));
+      document.head.appendChild(s);
+    }).catch(err => { this._mammothLoading = null; throw err; });
+    return this._mammothLoading;
+  }
+  async cwExtractDocxText(mammoth, buf) {
+    const result = await mammoth.extractRawText({ arrayBuffer: buf });
+    return String(result.value || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   }
   async cwExtractPdfText(pdfjsLib, buf) {
     const doc = await pdfjsLib.getDocument({ data: buf }).promise;
@@ -5067,17 +5083,20 @@ class Component extends DCLogic {
   cwSyllabusFile(e) {
     const file = e.target.files && e.target.files[0]; e.target.value = '';
     if (!file) return;
-    if (!/pdf/i.test(file.type) && !/\.pdf$/i.test(file.name)) { this.setState({ cwFlash: 'That doesn’t look like a PDF — try a .pdf file, or paste the text instead.' }); this.cwFlashClear(5000); return; }
+    const isPdf = /pdf/i.test(file.type) || /\.pdf$/i.test(file.name);
+    const isDocx = /wordprocessingml/i.test(file.type) || /\.docx$/i.test(file.name);
+    if (!isPdf && !isDocx) { this.setState({ cwFlash: 'That doesn’t look like a PDF or Word doc — try .pdf/.docx, or paste the text instead.' }); this.cwFlashClear(5500); return; }
     this.setState({ cwPdfBusy: true });
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        const pdfjsLib = await this.cwEnsurePdfJs();
-        const text = await this.cwExtractPdfText(pdfjsLib, reader.result);
-        if (!text) { this.setState({ cwPdfBusy: false, cwFlash: 'Couldn’t find any text in that PDF — it might be scanned or image-only. Try copy-pasting the text instead.' }); this.cwFlashClear(6500); return; }
+        const text = isPdf
+          ? await this.cwExtractPdfText(await this.cwEnsurePdfJs(), reader.result)
+          : await this.cwExtractDocxText(await this.cwEnsureMammoth(), reader.result);
+        if (!text) { this.setState({ cwPdfBusy: false, cwFlash: isPdf ? 'Couldn’t find any text in that PDF — it might be scanned or image-only. Try copy-pasting the text instead.' : 'Couldn’t find any text in that file. Try copy-pasting the text instead.' }); this.cwFlashClear(6500); return; }
         this.setState({ cwPdfBusy: false, cwSyllabusText: text });
         this.cwParseSyllabus();
-      } catch (err) { this.setState({ cwPdfBusy: false, cwFlash: 'Couldn’t read that PDF here — try copy-pasting the text instead.' }); this.cwFlashClear(6500); }
+      } catch (err) { this.setState({ cwPdfBusy: false, cwFlash: 'Couldn’t read that file here — try copy-pasting the text instead.' }); this.cwFlashClear(6500); }
     };
     reader.onerror = () => { this.setState({ cwPdfBusy: false, cwFlash: 'Couldn’t open that file.' }); this.cwFlashClear(); };
     reader.readAsArrayBuffer(file);
@@ -5119,7 +5138,11 @@ class Component extends DCLogic {
   // pasted syllabi (PDF copy/paste especially) wrap a "Homework:"/"Diet Analysis:"/"Readings:" item across
   // several lines — glue each one back into a single sentence, tagged with whatever "Week N" heading it fell under
   cwHeuristicBlocks(text) {
-    const lines = String(text).split(/\r?\n/).map(l => l.trim());
+    // blank lines carry no signal here (a "Homework:" label often sits on its own paragraph,
+    // separated from its content by a blank line — true of every paragraph break when this
+    // text came from a Word doc) — so drop them before scanning rather than treating them as
+    // a block terminator, which would truncate a label's content down to nothing
+    const lines = String(text).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const labelRe = /^(homework|diet analysis|readings)\s*:/i;
     const weekRe = /^Week\s+(\d+)/i;
     const stopRe = /^(LO\b|Week\s+\d|Tuesday\s+\d|Wednesday\s+\d|Thursday\s+\d|Friday\s+\d|Monday\s+\d|Chapter\s|Readings\s*:|Homework\s*:|Diet Analysis\s*:)/i;
@@ -5131,7 +5154,7 @@ class Component extends DCLogic {
         const norm = lm[1].toLowerCase();
         const label = norm === 'diet analysis' ? 'Diet Analysis' : norm === 'readings' ? 'Readings' : 'Homework';
         let buf = [lines[i].replace(labelRe, '').trim()]; i++;
-        while (i < lines.length && lines[i] && !stopRe.test(lines[i])) { buf.push(lines[i]); i++; }
+        while (i < lines.length && !stopRe.test(lines[i])) { buf.push(lines[i]); i++; }
         const joined = buf.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
         if (joined) blocks.push({ label, text: joined, week: curWeek });
         continue;
