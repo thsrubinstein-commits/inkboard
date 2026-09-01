@@ -3174,6 +3174,12 @@ button, input, textarea, select, [role="button"] {
                 <span style="flex:1;"></span>
                 <span style="font-size:10px; color:var(--fg-3); letter-spacing:0.06em; text-transform:uppercase;">{{ cwReviewCount }} selected</span>
               </div>
+              <sc-if value="{{ cwShowGuessedClass }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="flex:none; font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg-3);">Tag as class</span>
+                  <input data-nodrag="1" value="{{ cwGuessedClassName }}" oninput="{{ onCwGuessedClassName }}" placeholder="course name — auto-detected from the syllabus" style="flex:1; min-width:0; height:34px; padding:0 11px; background:var(--bg-0); border:1px solid var(--line-hard); border-radius:6px; color:var(--fg-1); font-family:var(--font-mono); font-size:12px;" style-focus="outline:2px solid var(--accent); outline-offset:2px; border-color:var(--accent);">
+                </div>
+              </sc-if>
               <div style="display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto; padding-right:2px;">
                 <sc-for list="{{ cwReview }}" as="r" hint-placeholder-count="4">
                   <div style="display:flex; gap:9px; align-items:center; opacity:{{ r.rowOpacity }};">
@@ -3816,6 +3822,8 @@ class Component extends DCLogic {
       cwSyllabusClassId: '',       // class the syllabus belongs to
       cwParsing: false,            // syllabus parse in flight
       cwParsed: null,              // [{title,atype,due,points,confidence,include}] editable review
+      cwGuessedClassName: '',      // auto-detected course name from the syllabus, editable before confirm
+      cwGuessedInstructor: '',     // auto-detected instructor from the syllabus
       cwBbText: '',                // Blackboard iCal URL or pasted .ics
       cwBbClassId: '',             // class the Blackboard feed maps to
       cwBbBusy: false,
@@ -5012,23 +5020,100 @@ class Component extends DCLogic {
   cwSetSyllabusText(v) { this.setState({ cwSyllabusText: v }); }
   cwSetSyllabusClass(id) { this.setState({ cwSyllabusClassId: id }); }
   cwFindDate(s) {
-    let m = s.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
-    if (m) { const now = new Date(); let y = m[3] ? (m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10)) : now.getFullYear(); const d = new Date(y, parseInt(m[1], 10) - 1, parseInt(m[2], 10)); if (!m[3] && this.keyOf(d) < this.todayKey()) d.setFullYear(y + 1); return this.keyOf(d); }
+    // slash dates (9/12, 9/12/26) are the reliable syllabus convention — try these first
+    let m = s.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+    if (!m) {
+      // dash-delimited dates are ambiguous with chapter/page ranges ("Ch. 1-2", "pp. 10-15") —
+      // only accept a dash match that isn't immediately preceded by that kind of label
+      const dashRe = /\b(\d{1,2})-(\d{1,2})(?:-(\d{2,4}))?\b/g;
+      let cand;
+      while ((cand = dashRe.exec(s))) {
+        const pre = s.slice(Math.max(0, cand.index - 12), cand.index).toLowerCase();
+        if (/\b(ch|chap|chapter|pp?|pg|page|pages|sec|section|unit|wk|week)s?\.?\s*$/.test(pre)) continue;
+        m = cand; break;
+      }
+    }
+    if (m) { const now = new Date(); let y = m[3] ? (m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10)) : now.getFullYear(); const mo = parseInt(m[1], 10), day = parseInt(m[2], 10); if (mo < 1 || mo > 12 || day < 1 || day > 31) return null; const d = new Date(y, mo - 1, day); if (!m[3] && this.keyOf(d) < this.todayKey()) d.setFullYear(y + 1); return this.keyOf(d); }
     m = s.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/i);
     if (m) { const M = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']; const mi = M.indexOf(m[1].toLowerCase().slice(0, 3)); const now = new Date(); const cand = new Date(now.getFullYear(), mi, parseInt(m[2], 10)); if (this.keyOf(cand) < this.todayKey()) cand.setFullYear(now.getFullYear() + 1); return this.keyOf(cand); }
     return null;
   }
+  // ---- auto-tag: guess the class this syllabus belongs to from its own text ----
+  cwGuessClassName(text) {
+    const skip = /^(instructor|professor|prof\.?|office|office hours?|email|phone|room|location|term|semester|credits?|prerequisites?|meeting time|days?|schedule)\s*:/i;
+    const lines = String(text).split(/\r?\n/).map(l => l.trim()).filter(Boolean).slice(0, 10);
+    const codeRe = /\b([A-Z]{2,6}[\s-]?\d{2,4}[A-Z]?)\b/;
+    const clean = (ln) => ln.replace(/\bcourse\s+syllabus\b/i, '').replace(/\bsyllabus\b/i, '').replace(/[-–:]\s*$/, '').replace(/\s{2,}/g, ' ').trim();
+    for (const ln of lines) { if (skip.test(ln)) continue; if (codeRe.test(ln)) { const c = clean(ln); if (c) return c.slice(0, 60); } }
+    for (const ln of lines) { if (skip.test(ln) || /^syllabus$/i.test(ln)) continue; const c = clean(ln); if (c.length >= 3) return c.slice(0, 60); }
+    return '';
+  }
+  cwGuessInstructor(text) {
+    const m = String(text).match(/\b(?:instructors?|professors?|prof\.?)\s*:?\s*(.+)/i);
+    if (!m) return '';
+    return m[1].split(/[\n,;]/)[0].trim().slice(0, 60);
+  }
+  // pasted syllabi (PDF copy/paste especially) wrap a "Homework:"/"Diet Analysis:"/"Readings:" item across
+  // several lines — glue each one back into a single sentence, tagged with whatever "Week N" heading it fell under
+  cwHeuristicBlocks(text) {
+    const lines = String(text).split(/\r?\n/).map(l => l.trim());
+    const labelRe = /^(homework|diet analysis|readings)\s*:/i;
+    const weekRe = /^Week\s+(\d+)/i;
+    const stopRe = /^(LO\b|Week\s+\d|Tuesday\s+\d|Wednesday\s+\d|Thursday\s+\d|Friday\s+\d|Monday\s+\d|Chapter\s|Readings\s*:|Homework\s*:|Diet Analysis\s*:)/i;
+    const blocks = []; let curWeek = null; let i = 0;
+    while (i < lines.length) {
+      const wm = lines[i].match(weekRe); if (wm) curWeek = wm[1];
+      const lm = lines[i].match(labelRe);
+      if (lm) {
+        const norm = lm[1].toLowerCase();
+        const label = norm === 'diet analysis' ? 'Diet Analysis' : norm === 'readings' ? 'Readings' : 'Homework';
+        let buf = [lines[i].replace(labelRe, '').trim()]; i++;
+        while (i < lines.length && lines[i] && !stopRe.test(lines[i])) { buf.push(lines[i]); i++; }
+        const joined = buf.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+        if (joined) blocks.push({ label, text: joined, week: curWeek });
+        continue;
+      }
+      i++;
+    }
+    return blocks;
+  }
   cwHeuristicSyllabus(text) {
-    const out = []; const typeOf = (s) => { s = s.toLowerCase(); if (/\b(final|midterm|exam|test)\b/.test(s)) return 'test'; if (/\bquiz(z|zes)?\b/.test(s)) return 'quiz'; if (/\b(read(ing)?|chapter|ch\.|pp?\.)\b/.test(s)) return 'reading'; if (/\b(project|presentation|paper|essay)\b/.test(s)) return 'project'; return 'assignment'; };
-    String(text).split(/\r?\n/).forEach(ln => { const d = this.cwFindDate(ln); if (!d) return; if (!/\b(due|exam|test|quiz|midterm|final|assignment|homework|hw|paper|essay|project|reading|read|chapter|submit|presentation)\b/i.test(ln)) return; const title = ln.replace(/\s+/g, ' ').trim(); if (title) out.push({ title: title.slice(0, 120), atype: typeOf(ln), due: d, points: null, confidence: 'low' }); });
-    return out.slice(0, 60);
+    const typeOfLine = (s) => { s = s.toLowerCase(); if (/\b(final|midterm|exam|test)\b/.test(s)) return 'test'; if (/\bquiz(z|zes)?\b/.test(s)) return 'quiz'; if (/\b(read(ing)?|chapter|ch\.|pp?\.)\b/.test(s)) return 'reading'; if (/\b(project|presentation|paper|essay)\b/.test(s)) return 'project'; return 'assignment'; };
+    const typeOfBlock = (label, s) => { if (/\b(final|midterm|exam|test)\b/i.test(s)) return 'test'; if (/\bquiz(z|zes)?\b/i.test(s)) return 'quiz'; if (label === 'Diet Analysis') return 'project'; if (label === 'Readings' || /\b(read(ing)?|chapter|ch\.)\b/i.test(s)) return 'reading'; return 'assignment'; };
+    const cleanTitle = (s) => s.replace(/\(due[^)]*\)/i, '').replace(/\s+/g, ' ').trim();
+    const stripDayDatePrefix = (s) => s.replace(/^(Tuesday|Wednesday|Thursday|Friday|Monday)\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s*/i, '').trim();
+    const out = []; const seen = new Set(); const blockDates = new Set();
+    this.cwHeuristicBlocks(text).forEach(b => {
+      const due = this.cwFindDate(b.text); if (!due) return;
+      const atype = typeOfBlock(b.label, b.text);
+      let title = cleanTitle(b.label === 'Diet Analysis' ? ('Diet Analysis: ' + b.text) : b.text);
+      if (b.week && !/\bweek\s*\d/i.test(title)) title = 'Week ' + b.week + ' — ' + title;
+      if (!title) return;
+      blockDates.add(due);
+      const key = due + '|' + title; if (seen.has(key)) return; seen.add(key);
+      out.push({ title: title.slice(0, 160), atype, due, points: null, confidence: 'low' });
+    });
+    // standalone dated lines not part of a labeled block (exam days, review sessions, etc.) —
+    // skip any date a block already covered, since a leftover per-line match there is just an
+    // unjoined tail fragment of that same block ("reports (due 9/11...)" already folded in above)
+    String(text).split(/\r?\n/).forEach(ln => {
+      const d = this.cwFindDate(ln); if (!d || blockDates.has(d)) return;
+      if (!/\b(due|exam|test|quiz|midterm|final|assignment|homework|hw|paper|essay|project|reading|read|chapter|submit|presentation)\b/i.test(ln)) return;
+      const title = cleanTitle(stripDayDatePrefix(ln.replace(/\s+/g, ' ').trim())); if (!title) return;
+      const key = d + '|' + title; if (seen.has(key)) return; seen.add(key);
+      out.push({ title: title.slice(0, 160), atype: typeOfLine(ln), due: d, points: null, confidence: 'low' });
+    });
+    out.sort((a, b) => a.due < b.due ? -1 : a.due > b.due ? 1 : 0);
+    return out.slice(0, 80);
   }
   cwParseSyllabus() {
     const text = (this.state.cwSyllabusText || '').trim(); if (!text) return;
     const cls = (this.state.classes || []).find(c => c.id === this.state.cwSyllabusClassId);
     const canAI = !!(window.claude && typeof window.claude.complete === 'function');
     const seed = this.cwHeuristicSyllabus(text).map(x => ({ ...x, include: true }));
-    this.setState({ cwParsed: seed, cwParsing: canAI });
+    const guessedName = cls ? '' : this.cwGuessClassName(text);
+    const guessedInstructor = cls ? '' : this.cwGuessInstructor(text);
+    this.setState({ cwParsed: seed, cwParsing: canAI, cwGuessedClassName: guessedName, cwGuessedInstructor: guessedInstructor });
     if (!canAI) return;
     try {
       const term = cls && cls.termStart ? (' The term runs ' + cls.termStart + ' to ' + (cls.termEnd || 'the end of the semester') + '.') : '';
@@ -5049,9 +5134,18 @@ class Component extends DCLogic {
   cwCancelSyllabus() { this.setState({ cwParsed: null, cwParsing: false }); }
   cwConfirmSyllabus() {
     const rows = (this.state.cwParsed || []).filter(r => r.include); if (!rows.length) { this.setState({ cwParsed: null }); return; }
-    const cid = this.state.cwSyllabusClassId;
+    let cid = this.state.cwSyllabusClassId;
+    let created = null;
+    if (!cid) {
+      const name = (this.state.cwGuessedClassName || '').trim();
+      if (name) {
+        const cols = this.cwColors();
+        created = { id: this.uid(), name, color: cols[(this.state.classes || []).length % cols.length], instructor: (this.state.cwGuessedInstructor || '').trim(), termStart: '', termEnd: '', meetingDays: [], blackboardIcs: '', _rev: Date.now() };
+        cid = created.id;
+      }
+    }
     const evs = rows.map(r => ({ id: this.uid(), title: r.title || 'Untitled', date: r.due, time: null, durationMin: null, notes: (r.points != null ? (r.points + ' pts') : null), kind: 'assignment', classId: cid || '', atype: r.atype, points: (r.points != null ? r.points : null), done: false, _rev: Date.now() }));
-    this.setState(s => ({ events: [...(s.events || []), ...evs], cwParsed: null, cwSyllabusText: '', cwParsing: false, cwClassId: cid || s.cwClassId, cwFlash: 'Added ' + evs.length + ' item' + (evs.length === 1 ? '' : 's') + (cid ? '' : ' (no class set)') }), () => this.persist());
+    this.setState(s => ({ events: [...(s.events || []), ...evs], classes: created ? [...(s.classes || []), created] : s.classes, cwParsed: null, cwSyllabusText: '', cwParsing: false, cwClassId: cid || s.cwClassId, cwSyllabusClassId: cid || s.cwSyllabusClassId, cwGuessedClassName: '', cwGuessedInstructor: '', cwFlash: (created ? ('Tagged as "' + created.name + '" · ') : '') + 'Added ' + evs.length + ' item' + (evs.length === 1 ? '' : 's') + (cid ? '' : ' (no class set)') }), () => this.persist());
     this.cwFlashClear();
   }
 
@@ -5119,6 +5213,7 @@ class Component extends DCLogic {
       onCwAddTitle: (e) => this.cwAddField({ title: e.target.value }), onCwAddDue: (e) => this.cwAddField({ due: e.target.value }), onCwSaveAdd: () => this.cwSaveAdd(), onCwCancelAdd: () => this.cwCancelAdd(),
       cwSyllabusText: this.state.cwSyllabusText || '', onCwSyllabus: (e) => this.cwSetSyllabusText(e.target.value), cwSyllabusClassPick: pickList(this.state.cwSyllabusClassId, (id) => this.cwSetSyllabusClass(id)), onCwParseSyllabus: () => this.cwParseSyllabus(), cwParsing: !!this.state.cwParsing,
       cwReview: review || [], cwShowReview: !!review, cwReviewCount: review ? review.filter(r => r.include).length : 0, onCwConfirmSyllabus: () => this.cwConfirmSyllabus(), onCwCancelSyllabus: () => this.cwCancelSyllabus(),
+      cwShowGuessedClass: !!review && !this.state.cwSyllabusClassId, cwGuessedClassName: this.state.cwGuessedClassName || '', onCwGuessedClassName: (e) => this.setState({ cwGuessedClassName: e.target.value }),
       cwBbText: this.state.cwBbText || '', onCwBb: (e) => this.cwSetBbText(e.target.value), cwBbClassPick: pickList(this.state.cwBbClassId, (id) => this.cwSetBbClass(id)), onCwImportBb: () => this.cwImportBb(), cwBbBusy: !!this.state.cwBbBusy,
       cwHasFlash: !!this.state.cwFlash, cwFlash: this.state.cwFlash || '',
     };
