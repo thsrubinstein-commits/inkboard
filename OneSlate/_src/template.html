@@ -3138,13 +3138,19 @@ button, input, textarea, select, [role="button"] {
                 <span style="color:var(--accent); font-size:13px;">✦</span>
                 <span style="font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--fg-1);">Drop a syllabus</span>
                 <sc-if value="{{ cwParsing }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px; color:var(--accent); letter-spacing:0.06em;">· reading…</span></sc-if>
+                <sc-if value="{{ cwPdfBusy }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px; color:var(--accent); letter-spacing:0.06em;">· reading PDF…</span></sc-if>
+                <span style="flex:1;"></span>
+                <label data-nodrag="1" style="flex:none; height:26px; padding:0 10px; border-radius:999px; border:1px dashed var(--line-hard); color:var(--fg-2); font-family:var(--font-mono); font-size:10px; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer; display:inline-flex; align-items:center; gap:5px;" style-hover="border-color:var(--accent); color:var(--accent);">
+                  ⇪ Upload PDF
+                  <input data-nodrag="1" type="file" accept="application/pdf,.pdf" onchange="{{ onCwSyllabusFile }}" style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;">
+                </label>
               </div>
               <div style="display:flex; flex-wrap:wrap; gap:6px;">
                 <sc-for list="{{ cwSyllabusClassPick }}" as="p" hint-placeholder-count="2">
                   <button data-nodrag="1" onclick="{{ p.onPick }}" style="height:28px; padding:0 11px; border-radius:999px; border:1px solid {{ p.pBg }}; background:{{ p.pBg }}; color:{{ p.pColor }}; font-family:var(--font-mono); font-size:11px; cursor:pointer;">{{ p.label }}</button>
                 </sc-for>
               </div>
-              <textarea data-nodrag="1" value="{{ cwSyllabusText }}" oninput="{{ onCwSyllabus }}" rows="5" placeholder="Paste your syllabus here — dates, assignments, quizzes, exams. I’ll pull out each item and its due date for you to confirm." style="min-height:120px; max-height:280px; padding:12px 13px; background:var(--well); border:1px solid var(--line-hard); border-radius:7px; color:var(--fg-1); font-family:var(--font-mono); font-size:13px; line-height:1.55; resize:vertical;" style-focus="outline:2px solid var(--accent); outline-offset:2px; border-color:var(--accent);"></textarea>
+              <textarea data-nodrag="1" value="{{ cwSyllabusText }}" oninput="{{ onCwSyllabus }}" rows="5" placeholder="Paste your syllabus here, or upload the PDF above — dates, assignments, quizzes, exams. I’ll pull out each item and its due date for you to confirm." style="min-height:120px; max-height:280px; padding:12px 13px; background:var(--well); border:1px solid var(--line-hard); border-radius:7px; color:var(--fg-1); font-family:var(--font-mono); font-size:13px; line-height:1.55; resize:vertical;" style-focus="outline:2px solid var(--accent); outline-offset:2px; border-color:var(--accent);"></textarea>
               <button data-nodrag="1" onclick="{{ onCwParseSyllabus }}" style="height:42px; background:var(--accent); border:0; border-radius:7px; color:var(--accent-ink); font-family:var(--font-mono); font-size:12px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; cursor:pointer;" style-hover="filter:brightness(1.08);">Extract assignments</button>
             </div>
 
@@ -3821,6 +3827,7 @@ class Component extends DCLogic {
       cwSyllabusText: '',          // pasted syllabus
       cwSyllabusClassId: '',       // class the syllabus belongs to
       cwParsing: false,            // syllabus parse in flight
+      cwPdfBusy: false,            // extracting text from an uploaded PDF
       cwParsed: null,              // [{title,atype,due,points,confidence,include}] editable review
       cwGuessedClassName: '',      // auto-detected course name from the syllabus, editable before confirm
       cwGuessedInstructor: '',     // auto-detected instructor from the syllabus
@@ -5019,6 +5026,62 @@ class Component extends DCLogic {
   // ---- syllabus drop-in: heuristic seed instantly, then AI refine if available ----
   cwSetSyllabusText(v) { this.setState({ cwSyllabusText: v }); }
   cwSetSyllabusClass(id) { this.setState({ cwSyllabusClassId: id }); }
+  // ---- PDF upload: pulls in pdf.js on first use, extracts text, then runs the normal syllabus parse ----
+  cwEnsurePdfJs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (this._pdfjsLoading) return this._pdfjsLoading;
+    const base = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+    this._pdfjsLoading = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = base + 'pdf.min.js';
+      s.onload = () => { try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.js'; resolve(window.pdfjsLib); } catch (e) { reject(e); } };
+      s.onerror = () => reject(new Error('pdfjs-load-failed'));
+      document.head.appendChild(s);
+    }).catch(err => { this._pdfjsLoading = null; throw err; });
+    return this._pdfjsLoading;
+  }
+  async cwExtractPdfText(pdfjsLib, buf) {
+    const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+    let text = '';
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p);
+      const content = await page.getTextContent();
+      let lastY = null, lastEndX = null, line = '';
+      content.items.forEach(item => {
+        if (!item.str) return;
+        const x = item.transform[4], y = item.transform[5];
+        // font size ~= the transform matrix's vertical scale; used to judge whether a horizontal
+        // gap between two text runs is a real word-space or just two glyph runs of the same word
+        const fontH = Math.hypot(item.transform[2], item.transform[3]) || 10;
+        if (lastY !== null && Math.abs(y - lastY) > 2) { text += line + '\n'; line = ''; lastEndX = null; }
+        if (line && lastEndX !== null) { const gap = x - lastEndX; if (gap > fontH * 0.18 || gap < -fontH) line += ' '; }
+        line += item.str;
+        lastEndX = x + (item.width || item.str.length * fontH * 0.5);
+        lastY = y;
+      });
+      if (line) text += line + '\n';
+      text += '\n';
+    }
+    return text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+  cwSyllabusFile(e) {
+    const file = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!file) return;
+    if (!/pdf/i.test(file.type) && !/\.pdf$/i.test(file.name)) { this.setState({ cwFlash: 'That doesn’t look like a PDF — try a .pdf file, or paste the text instead.' }); this.cwFlashClear(5000); return; }
+    this.setState({ cwPdfBusy: true });
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const pdfjsLib = await this.cwEnsurePdfJs();
+        const text = await this.cwExtractPdfText(pdfjsLib, reader.result);
+        if (!text) { this.setState({ cwPdfBusy: false, cwFlash: 'Couldn’t find any text in that PDF — it might be scanned or image-only. Try copy-pasting the text instead.' }); this.cwFlashClear(6500); return; }
+        this.setState({ cwPdfBusy: false, cwSyllabusText: text });
+        this.cwParseSyllabus();
+      } catch (err) { this.setState({ cwPdfBusy: false, cwFlash: 'Couldn’t read that PDF here — try copy-pasting the text instead.' }); this.cwFlashClear(6500); }
+    };
+    reader.onerror = () => { this.setState({ cwPdfBusy: false, cwFlash: 'Couldn’t open that file.' }); this.cwFlashClear(); };
+    reader.readAsArrayBuffer(file);
+  }
   cwFindDate(s) {
     // slash dates (9/12, 9/12/26) are the reliable syllabus convention — try these first
     let m = s.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
@@ -5212,6 +5275,7 @@ class Component extends DCLogic {
       cwAddDraft: addDraft || {}, cwShowAdd: !!addDraft,
       onCwAddTitle: (e) => this.cwAddField({ title: e.target.value }), onCwAddDue: (e) => this.cwAddField({ due: e.target.value }), onCwSaveAdd: () => this.cwSaveAdd(), onCwCancelAdd: () => this.cwCancelAdd(),
       cwSyllabusText: this.state.cwSyllabusText || '', onCwSyllabus: (e) => this.cwSetSyllabusText(e.target.value), cwSyllabusClassPick: pickList(this.state.cwSyllabusClassId, (id) => this.cwSetSyllabusClass(id)), onCwParseSyllabus: () => this.cwParseSyllabus(), cwParsing: !!this.state.cwParsing,
+      onCwSyllabusFile: (e) => this.cwSyllabusFile(e), cwPdfBusy: !!this.state.cwPdfBusy,
       cwReview: review || [], cwShowReview: !!review, cwReviewCount: review ? review.filter(r => r.include).length : 0, onCwConfirmSyllabus: () => this.cwConfirmSyllabus(), onCwCancelSyllabus: () => this.cwCancelSyllabus(),
       cwShowGuessedClass: !!review && !this.state.cwSyllabusClassId, cwGuessedClassName: this.state.cwGuessedClassName || '', onCwGuessedClassName: (e) => this.setState({ cwGuessedClassName: e.target.value }),
       cwBbText: this.state.cwBbText || '', onCwBb: (e) => this.cwSetBbText(e.target.value), cwBbClassPick: pickList(this.state.cwBbClassId, (id) => this.cwSetBbClass(id)), onCwImportBb: () => this.cwImportBb(), cwBbBusy: !!this.state.cwBbBusy,
